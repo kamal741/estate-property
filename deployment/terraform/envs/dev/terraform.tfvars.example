@@ -1,9 +1,10 @@
 # Copy to terraform.tfvars (gitignored) and set real values.
 # Never commit terraform.tfvars — it is gitignored under deployment/terraform/envs/*/.
 #
-# region — used for regional GCP resources (SQL, Redis, app bucket) and as the default
+# region — used for regional GCP resources (Cloud SQL, Redis) and as the default
 #          GCS *location* for the Terraform state bucket when deploy-platform.sh creates it
 #          (override with arg 3 or GCS_STATE_BUCKET_LOCATION).
+#          (Terraform does not create a separate app GCS bucket unless create_application_gcs_bucket = true.)
 
 project_id = "your-gcp-project-id"
 region     = "us-central1"

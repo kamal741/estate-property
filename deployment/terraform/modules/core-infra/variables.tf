@@ -58,9 +58,15 @@ variable "redis_memory" {
   default     = 1
 }
 
+variable "create_application_gcs_bucket" {
+  type        = bool
+  description = "When true, creates a separate GCS bucket <env>-estateflow-bucket for application assets. When false (default), only the Terraform remote state bucket is used (created by deploy-platform.sh / init); no second bucket."
+  default     = false
+}
+
 variable "bucket_force_destroy" {
   type        = bool
-  description = "When true, allows Terraform to delete a non-empty bucket (including versioned objects). Use false in production."
+  description = "When true, allows Terraform to delete a non-empty application bucket (including versioned objects). Use false in production. Only applies when create_application_gcs_bucket is true."
   default     = false
 }
 

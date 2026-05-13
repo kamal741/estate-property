@@ -1,6 +1,6 @@
 output "bucket_name" {
-  description = "GCS bucket name for application assets."
-  value       = google_storage_bucket.bucket.name
+  description = "GCS application bucket name when create_application_gcs_bucket is true; otherwise null (use remote state bucket or add your own storage)."
+  value       = var.create_application_gcs_bucket ? google_storage_bucket.bucket[0].name : null
 }
 
 output "db_connection_name" {

@@ -170,9 +170,12 @@ resource "random_password" "db" {
 }
 
 # -----------------------------------------------------------------------------
-# GCS bucket
+# Optional GCS bucket for application assets (separate from Terraform state bucket).
+# Default off — use one bucket (remote state) only; see create_application_gcs_bucket.
 # -----------------------------------------------------------------------------
 resource "google_storage_bucket" "bucket" {
+  count = var.create_application_gcs_bucket ? 1 : 0
+
   name          = "${var.env}-estateflow-bucket"
   location      = var.region
   force_destroy = var.bucket_force_destroy

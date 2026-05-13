@@ -25,6 +25,8 @@ This layout uses **one state per environment** under `deployment/terraform/envs/
    - Creates **`gs://estateflow-bucket-<env>`** in **`GCS_STATE_BUCKET_LOCATION`** if unset (defaults to **`region`** from `terraform.tfvars`).
    - Runs **`terraform init -backend-config="bucket=..."`**.
 
+   **Second GCS bucket:** Terraform does **not** create `<env>-estateflow-bucket` by default (only the remote **state** bucket above). To add a dedicated application bucket again, set **`create_application_gcs_bucket = true`** on **`module "infra"`** in that env’s **`main.tf`**.
+
    Override defaults:
 
    ```bash
@@ -69,7 +71,8 @@ If **`add-iam-policy-binding`** fails with **`storage.buckets.getIamPolicy`** de
 |--------|-----|------|
 | Cloud SQL deletion protection | off | on |
 | Private IP only for Cloud SQL | no (public IP; connections must use TLS — `ssl_mode` is `ENCRYPTED_ONLY` on the instance) | yes (VPC + private service access) |
-| GCS bucket `force_destroy` | on | off |
+| GCS application bucket (`<env>-estateflow-bucket`) | off by default (single bucket: remote state only) | off by default |
+| GCS bucket `force_destroy` (application bucket only) | on (when app bucket enabled) | off (when app bucket enabled) |
 | Redis tier | BASIC | STANDARD_HA (in-transit TLS when tier is not BASIC) |
 | Redis memory (GB) | 1 | 5 (sensible default for HA) |
 | GKE cluster | `dev-estateflow-cluster` (zonal `us-central1-a`) | `prod-estateflow-cluster` (zonal `us-central1-a`) |
@@ -143,6 +146,12 @@ Terraform creates the workload namespace `gke_namespace` (e.g. `dev-estateflow`,
 ### Prod: private SQL and peering
 
 Private Cloud SQL is created after VPC peering is established. If the first `terraform apply` fails on the SQL instance with an error about the private connection or peering, wait one to two minutes and run **`terraform apply` again** (this is a known ordering quirk when `depends_on` cannot chain the peering connection to SQL in a single static list).
+
+### Upgrading: second GCS bucket (`<env>-estateflow-bucket`)
+
+Older revisions created **two** buckets: **`estateflow-bucket-<env>`** (Terraform state, from `deploy-platform.sh`) and **`<env>-estateflow-bucket`** (application, from Terraform). The module now defaults **`create_application_gcs_bucket = false`**, so new applies **do not** create the second bucket.
+
+If your state still contains **`module.infra.google_storage_bucket.bucket`**, the next **`terraform plan`** may propose **destroying** that bucket resource (and deleting the bucket in GCP when `force_destroy` allows). To **keep** the old application bucket under Terraform management, set **`create_application_gcs_bucket = true`** on **`module "infra"`** in that environment’s **`main.tf`** before applying.
 
 ## CI
 
