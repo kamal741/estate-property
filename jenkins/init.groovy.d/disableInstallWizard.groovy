@@ -1,8 +1,9 @@
-import jenkins.model.*;
-import jenkins.install.*;
+import jenkins.install.InstallState
+import jenkins.model.Jenkins
 
-Thread.start {
-    println("I Need to let jenkins complete startup before running this command")
-    sleep 15000
-    Jenkins.getInstance().setInstallState(InstallState.INITIAL_SETUP_COMPLETED)
-}
+// Skip the plugin/setup wizard without spawning a background thread. On Jenkins 2.555+,
+// setInstallState(INITIAL_SETUP_COMPLETED) ends up in SetupWizard.completeSetup(), which
+// requires Overall/Administer — anonymous threads from Thread.start() lose that context and
+// throw AccessDeniedException3 (see controller log).
+println("disableInstallWizard: setting install state to ${InstallState.INITIAL_SETUP_COMPLETED}")
+Jenkins.get().setInstallState(InstallState.INITIAL_SETUP_COMPLETED)

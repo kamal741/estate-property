@@ -136,7 +136,7 @@ Jenkins only runs **`init.groovy.d/*.groovy`** (name must **end with `.groovy`**
 This repo ships:
 
 - **`97-setCSRFAndScriptSecurity.groovy`** — runs your existing `preapproveAll()` + CSRF settings (same as the old `.override` file).
-- **`zzz-approvePendingJobDslScripts.groovy`** — calls **`approvePendingScripts()`** on a schedule for roughly the first hour after boot (plus early passes at 45s and 5m). That catches Job DSL whole-script approvals when the first seed run happens **after** those early windows—common in real use. Rebuild the controller image and restart the pod after changing this file.
+- **`zzz-approvePendingJobDslScripts.groovy`** — periodically runs **`ScriptApproval.preapproveAll()`** plus **`save()`** (there is no `approvePendingScripts()` API). That clears pending whole-script entries after Job DSL runs, including when the first seed happens long after boot. Rebuild the controller image and restart the pod after changing this file.
 
 **If the seed still fails once:** wait up to about two minutes after the failure (next bootstrap pass) and **run the seed again**, or use **Manage Jenkins → In-process Script Approval** once.
 

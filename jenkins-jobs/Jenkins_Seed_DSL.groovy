@@ -40,6 +40,7 @@ GIT Project for .groovy files <a href="https://github.com/kamal741/estate-proper
     }
 
     publishers {
+        downstream('Jenkins-Security_Approvals', 'SUCCESS')
         extendedEmail {
             recipientList('$EMAIL_RECIPIENTS')
             triggers {
