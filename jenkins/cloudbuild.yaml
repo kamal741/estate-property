@@ -1,0 +1,26 @@
+# Cloud Build: Jenkins image from monorepo root (Dockerfile uses COPY jenkins/... paths).
+# Submit from repo root:
+#   gcloud builds submit . --config=jenkins/cloudbuild.yaml --substitutions=_AR_IMAGE=REGION-docker.pkg.dev/PROJECT/REPO/jenkins:TAG
+#
+# Requires: cloudbuild.googleapis.com, Artifact Registry repo, Cloud Build SA with artifactregistry.writer on the repo.
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-f"
+      - "jenkins/Dockerfile"
+      - "-t"
+      - "${_AR_IMAGE}"
+      - "."
+
+images:
+  - "${_AR_IMAGE}"
+
+substitutions:
+  _AR_IMAGE: "us-central1-docker.pkg.dev/PROJECT/REPO/jenkins:tag"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 2700s

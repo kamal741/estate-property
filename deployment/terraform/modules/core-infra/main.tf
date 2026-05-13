@@ -31,6 +31,9 @@ locals {
 
   # 🐳 Artifact Registry (Docker images for GKE / Jenkins)
   "artifactregistry.googleapis.com",
+
+  # ☁️ Cloud Build (optional Jenkins image build via gcloud builds submit)
+  "cloudbuild.googleapis.com",
   ])
 
   gke_cluster_name = "${var.env}-estateflow-cluster"
@@ -351,4 +354,13 @@ resource "google_artifact_registry_repository_iam_member" "gke_nodes_reader" {
   repository = google_artifact_registry_repository.docker.name
   role       = "roles/artifactregistry.reader"
   member     = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+# Default Cloud Build service account pushes images built by gcloud builds submit (deploy-k8s-jenkins.sh).
+resource "google_artifact_registry_repository_iam_member" "cloud_build_writer" {
+  project    = var.project_id
+  location   = google_artifact_registry_repository.docker.location
+  repository = google_artifact_registry_repository.docker.name
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
 }

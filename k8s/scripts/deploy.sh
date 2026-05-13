@@ -28,6 +28,7 @@ show_usage() {
     GCP_PROJECT_ID + GCP_REGION + ARTIFACT_REGISTRY_REPOSITORY  (same path is built; optional JENKINS_AR_IMAGE_NAME, default jenkins)
     Else if SKIP_JENKINS_IMAGE_REPOSITORY_AUTO is unset: terraform output jenkins_image_repository from deployment/terraform/envs/<env>
     SKIP_JENKINS_IMAGE_REPOSITORY_AUTO=1  → do not inject; use values + chart defaults only
+  Jenkins image.tag: set JENKINS_IMAGE_TAG (e.g. v1.0.0) to override k8s/env/<env>/jenkins-values.yaml image.tag.
   Extra helm args after ours override --set-string (e.g. ... jenkins --set-string image.tag=foo).
 EOF
 }
@@ -106,13 +107,17 @@ helm_upgrade() {
   local ns
   ns="$(helm_namespace "$service")"
 
-  local repo_override=()
+  local jenkins_image_overrides=()
   if [[ "$service" == "jenkins" ]]; then
     local resolved
     resolved="$(jenkins_resolve_image_repository "$env")"
     if [[ -n "$resolved" ]]; then
-      repo_override=(--set-string "image.repository=$resolved")
+      jenkins_image_overrides+=(--set-string "image.repository=$resolved")
       echo "    (Jenkins image.repository from env/terraform: $resolved)"
+    fi
+    if [[ -n "${JENKINS_IMAGE_TAG:-}" ]]; then
+      jenkins_image_overrides+=(--set-string "image.tag=${JENKINS_IMAGE_TAG}")
+      echo "    (Jenkins image.tag from JENKINS_IMAGE_TAG: ${JENKINS_IMAGE_TAG})"
     fi
   fi
 
@@ -124,7 +129,7 @@ helm_upgrade() {
     --namespace "$ns" \
     --create-namespace \
     --values "$values" \
-    "${repo_override[@]}" \
+    "${jenkins_image_overrides[@]}" \
     "$@"
 }
 

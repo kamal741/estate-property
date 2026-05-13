@@ -112,27 +112,16 @@ cd deployment/terraform/envs/dev
 terraform output -raw gke_get_credentials_command | bash
 ```
 
-From the **estate-property** repo root you can also use `k8s/scripts/deploy.sh` with kubeconfig sync (requires `terraform init` in that env directory and GCP auth):
+From the **estate-property** repo root, **`deployment/scripts/terraform-deploy.sh`** runs bootstrap, **`init`**, **`apply`**, and kubeconfig sync. **`deployment/scripts/deploy-k8s-jenkins.sh`** runs optional Cloud Build push + Helm. **`deploy-platform.sh`** runs both in sequence (see root **`README.md`** §3).
 
 ```bash
-SYNC_GKE_KUBECONFIG=1 ./k8s/scripts/deploy.sh kubectl dev
-SYNC_GKE_KUBECONFIG=1 ./k8s/scripts/deploy.sh dev jenkins
+./deployment/scripts/terraform-deploy.sh dev dev-estateflow-bucket us-central1
+ARTIFACT_REGISTRY_REPOSITORY=estateflow-dev BUILD_PUSH_JENKINS_IMAGE=1 ./deployment/scripts/deploy-k8s-jenkins.sh dev
+# Or one-shot:
+./deployment/scripts/deploy-platform.sh dev dev-estateflow-bucket us-central1
 ```
 
-**Bootstrap Jenkins + ingress after Terraform** (Terraform apply, then Helm for Jenkins and platform-ingress only):
-
-```bash
-./deployment/scripts/deploy-platform.sh dev
-# Skip Terraform apply (still runs init + kube sync + Helm):
-SKIP_TERRAFORM=1 ./deployment/scripts/deploy-platform.sh prod
-# Helm only — no Terraform, no kube sync (kubectl must already target the cluster):
-HELM_ONLY=1 ./deployment/scripts/deploy-platform.sh dev
-# Build/push Jenkins to Artifact Registry then Helm (requires Docker; repo id from Terraform):
-REPO="$(cd deployment/terraform/envs/dev && terraform output -raw artifact_registry_repository_id)"
-ARTIFACT_REGISTRY_REPOSITORY="$REPO" BUILD_PUSH_JENKINS_IMAGE=1 ./deployment/scripts/deploy-platform.sh dev
-```
-
-To push images without **`deploy-platform.sh`**, use **`k8s/scripts/docker-build-push-gcp-ar.sh`** from the repo root (see root **`README.md`** §5).
+You can also use **`k8s/scripts/deploy.sh`** with **`SYNC_GKE_KUBECONFIG=1`** after **`terraform init`** in that env directory.
 
 **Jenkins pipelines** (cluster name, namespaces, `gcloud get-credentials` string from state):
 
