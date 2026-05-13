@@ -7,9 +7,13 @@
 # Examples:
 #   ./deployment/scripts/deploy-platform.sh dev
 #   ./deployment/scripts/deploy-platform.sh dev my-unique-tf-state-bucket us-central1
+#   HELM_ONLY=1 ./deployment/scripts/deploy-platform.sh dev    # only Jenkins + platform-ingress Helm
 #
 # Environment:
-#   SKIP_TERRAFORM=1          Skip terraform apply (still runs init + kube sync + Helm unless skipped below).
+#   HELM_ONLY=1               Only run Helm (Jenkins + platform-ingress). Skips gcloud bootstrap, terraform,
+#                             and kubeconfig sync — your kubecontext must already target the right cluster.
+#   SKIP_TERRAFORM=1          Skip terraform apply only (still runs bootstrap, init, kube sync, then Helm).
+#   SKIP_KUBECONFIG_SYNC=1    Skip terraform output get-credentials (use with SKIP_TERRAFORM=1 if kubeconfig OK).
 #   SKIP_GCLOUD_BOOTSTRAP=1   Skip gcloud API enable + state bucket create (use when bucket already exists).
 #   TERRAFORM_STATE_BUCKET    State bucket name (default: estateflow-bucket-<env> — must be globally unique in GCS).
 #   GCS_STATE_BUCKET_LOCATION Location for new bucket (default: region from terraform.tfvars, else us-central1).
@@ -25,8 +29,8 @@ die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
   die "usage: $0 <dev|prod> [terraform_state_bucket] [gcs_bucket_location]
-  Second arg overrides TERRAFORM_STATE_BUCKET; third overrides GCS_STATE_BUCKET_LOCATION.
-  Requires: terraform.tfvars in deployment/terraform/envs/<env>/ with project_id and region."
+  HELM_ONLY=1 $0 <env>  — only Helm (Jenkins + platform-ingress); no Terraform.
+  Otherwise requires terraform.tfvars under deployment/terraform/envs/<env>/ (project_id, region)."
 }
 
 [[ "${1:-}" ]] || usage
@@ -38,6 +42,19 @@ TFVARS="$TF_DIR/terraform.tfvars"
 
 [[ -d "$TF_DIR" ]] || die "missing terraform env: $TF_DIR"
 [[ -f "$K8S_HELM" ]] || die "missing k8s/scripts/deploy.sh"
+
+helm_only() {
+  echo "==> HELM_ONLY=1 — Helm only (Jenkins + platform-ingress); kubecontext must already target the cluster"
+  bash "$K8S_HELM" helm "$ENV" jenkins
+  bash "$K8S_HELM" helm "$ENV" platform-ingress
+  echo "==> done."
+}
+
+if [[ "${HELM_ONLY:-}" == "1" ]]; then
+  helm_only
+  exit 0
+fi
+
 [[ -f "$TFVARS" ]] || die "missing $TFVARS — copy from terraform.tfvars.example and set project_id and region"
 
 # Read first assignment of key = "value" or key = value from HCL-ish tfvars (no nested blocks).
@@ -122,7 +139,11 @@ else
   echo "==> SKIP_TERRAFORM=1 — skipping terraform apply"
 fi
 
-sync_kube
+if [[ "${SKIP_KUBECONFIG_SYNC:-}" != "1" ]]; then
+  sync_kube
+else
+  echo "==> SKIP_KUBECONFIG_SYNC=1 — skipping kubeconfig refresh"
+fi
 
 echo "==> Helm: Jenkins then platform-ingress"
 bash "$K8S_HELM" helm "$ENV" jenkins

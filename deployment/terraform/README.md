@@ -110,8 +110,10 @@ SYNC_GKE_KUBECONFIG=1 ./k8s/scripts/deploy.sh dev jenkins
 
 ```bash
 ./deployment/scripts/deploy-platform.sh dev
-# Skip Terraform if infra is already applied:
+# Skip Terraform apply (still runs init + kube sync + Helm):
 SKIP_TERRAFORM=1 ./deployment/scripts/deploy-platform.sh prod
+# Helm only — no Terraform, no kube sync (kubectl must already target the cluster):
+HELM_ONLY=1 ./deployment/scripts/deploy-platform.sh dev
 ```
 
 **Jenkins pipelines** (cluster name, namespaces, `gcloud get-credentials` string from state):
