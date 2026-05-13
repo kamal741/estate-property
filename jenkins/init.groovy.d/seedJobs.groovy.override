@@ -40,7 +40,7 @@ if (curJob) {
     
     //add the dsl scripts builder
     def dslBuilder = new ExecuteDslScripts()
-    dslBuilder.setTargets("common/Jenkins_Seed_DSL.groovy") 
+    dslBuilder.setTargets("jenkins-jobs/Jenkins_Seed_DSL.groovy") 
     dslBuilder.setUseScriptText(false)
     dslBuilder.setIgnoreExisting(false)
     dslBuilder.setRemovedJobAction(RemovedJobAction.DELETE)

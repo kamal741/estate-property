@@ -1,3 +1,5 @@
+# jenkins-plugin-cli may print "Security warnings" here — informational unless install fails.
+# Fixable bumps below (e.g. 2026-04-29 advisory). Plugins marked UNSOLVED: no fixed release yet — plan migration/removal.
 active-directory:2.41
 ansicolor:536.v13fa_b_860c267
 antisamy-markup-formatter:173.v680e3a_b_69ff3
@@ -22,7 +24,7 @@ conditional-buildstep:1.5.0
 configuration-as-code:2077.v41f1011a_5110
 configuration-as-code-groovy:1.1
 credentials:1502.v5c95e620ddfe
-credentials-binding:719.v80e905ef14eb_
+credentials-binding:720.v3f6decef43ea_
 customizable-header:295.v2544b_ca_19b_97
 dark-theme:652.vea_da_dfea_e769
 data-tables-api:2.3.7-1558.vf82fa_133ce1c
@@ -35,7 +37,9 @@ eddsa-api:0.3.0.1-29.v67e9a_1c969b_b_
 email-ext:1933.v45cec755423f
 envinject:2.934.vc674e76cf954
 envinject-api:1.237.v82803a_511906
+# UNSOLVED security (deprecated plugin): migrate off extended-choice-parameter when possible.
 extended-choice-parameter:388.ve7b_d0b_920e10
+# UNSOLVED security: no fixed release; remove if unused.
 files-found-trigger:1.5
 flatpickr-api:4.6.13-32.v60a_51029c136
 font-awesome-api:7.2.0-983.v3f63c34eddb_9
@@ -76,7 +80,7 @@ lockable-resources:1509.va_6b_5b_5cb_0b_40
 login-theme:325.v94b_7548124cb_
 mailer:534.v1b_36f5864073
 mask-passwords:220.v95819055b_265
-matrix-auth:3.2.9
+matrix-auth:3.2.10
 matrix-project:870.v9db_fcfc2f45b_
 maven-plugin:3.27
 mcp-server:0.168.v13951585050d
@@ -114,7 +118,7 @@ role-strategy:848.va_a_ea_673cf0b_c
 run-condition:276.v97298f3a_cd51
 saml:4.595.vec7523b_5d543
 scm-api:728.vc30dcf7a_0df5
-script-security:1399.ve6a_66547f6e1
+script-security:1402.v94c9ce464861
 snakeyaml-api:2.5-149.v72471e9c6371
 snakeyaml-engine-api:3.0.1-5.vd98ea_ff3b_92e
 ssh-credentials:372.va_250881b_08cd

@@ -129,6 +129,21 @@ Use **`gke_app_namespace`** for Terraform-created app workloads; Jenkins control
 
 After the controller is running, use Jenkins to run seed jobs and application pipelines.
 
+### Job DSL: `script not yet approved for use`
+
+Jenkins only runs **`init.groovy.d/*.groovy`** (name must **end with `.groovy`**). Files named **`*.groovy.override` are ignored**, so script-approval init never ran.
+
+This repo ships:
+
+- **`97-setCSRFAndScriptSecurity.groovy`** — runs your existing `preapproveAll()` + CSRF settings (same as the old `.override` file).
+- **`zzz-approvePendingJobDslScripts.groovy`** — after a short delay, calls **`approvePendingScripts()`** so whole-script approvals queued by the first Job DSL run are cleared (rebuild the controller image and restart, or approve once in the UI).
+
+**Job DSL Groovy** under **`jenkins-jobs/`** should avoid **`Jenkins.instance`**, **`Hudson.instance.getItem`**, and similar core APIs; they stay pending until approved. **`Jenkins_Seed_DSL.groovy`** uses fixed defaults for parameters and schedule (tune values in the Jenkins UI after the first successful seed if needed).
+
+**Without rebuilding:** **Manage Jenkins → In-process Script Approval** (or the link in the failed build log) and approve each pending script.
+
+You also have **`permissive-script-security`** in `plugins.txt`; if your admins enable that strategy under **Configure Global Security**, fewer approvals are required (follow your org’s security policy).
+
 ---
 
 ## 6. Ingress chart notes
