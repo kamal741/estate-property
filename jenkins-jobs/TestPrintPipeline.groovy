@@ -28,7 +28,7 @@ pipeline {
             }
         }
     }
-}'''.stripIndent()))
+}'''.stripIndent())
         }
     }
 }
