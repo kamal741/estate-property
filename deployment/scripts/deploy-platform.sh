@@ -180,7 +180,7 @@ if [[ "${HELM_ONLY:-}" == "1" ]]; then
     [[ -n "$REGION" ]] || die "region is empty in $TFVARS"
     [[ -n "${ARTIFACT_REGISTRY_REPOSITORY:-}" ]] ||
       die "ARTIFACT_REGISTRY_REPOSITORY is required when BUILD_PUSH_JENKINS_IMAGE=1 (Artifact Registry repository id, e.g. estateflow-dev)"
-    local jtag="${JENKINS_IMAGE_TAG:-$ENV}"
+    jtag="${JENKINS_IMAGE_TAG:-$ENV}"
     echo "==> HELM_ONLY + BUILD_PUSH_JENKINS_IMAGE=1 — build and push Jenkins (${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/jenkins:${jtag})"
     bash "$DOCKER_BUILD_PUSH" \
       --project "$PROJECT_ID" \
