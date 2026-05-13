@@ -23,6 +23,7 @@
 #   JENKINS_IMAGE_TAG          Optional; defaults to <env> (dev or prod) to match k8s/env/<env>/jenkins-values.yaml tags.
 #   JENKINS_IMAGE_REPOSITORY   Optional full image path without tag; if unset, deploy.sh may fill from Terraform output.
 #   SKIP_JENKINS_IMAGE_REPOSITORY_AUTO=1  Do not auto-set JENKINS_IMAGE_REPOSITORY from ARTIFACT_REGISTRY_REPOSITORY / TF.
+#   GCP_PROJECT_ID / GCP_REGION  If terraform.tfvars is missing, both may be set to create it (gitignored) and continue.
 
 set -euo pipefail
 
@@ -34,7 +35,8 @@ die() { echo "error: $*" >&2; exit 1; }
 usage() {
   die "usage: $0 <dev|prod> [terraform_state_bucket] [gcs_bucket_location]
   HELM_ONLY=1 $0 <env>  — only Helm (Jenkins + platform-ingress); no Terraform.
-  Otherwise requires terraform.tfvars under deployment/terraform/envs/<env>/ (project_id, region)."
+  Otherwise requires terraform.tfvars under deployment/terraform/envs/<env>/ (project_id, region), or set
+  GCP_PROJECT_ID and GCP_REGION to create that file automatically when it is missing."
 }
 
 [[ "${1:-}" ]] || usage
@@ -61,11 +63,25 @@ fi
 
 DOCKER_BUILD_PUSH="$REPO_ROOT/k8s/scripts/docker-build-push-gcp-ar.sh"
 [[ -f "$DOCKER_BUILD_PUSH" ]] || die "missing k8s/scripts/docker-build-push-gcp-ar.sh"
-[[ -f "$TFVARS" ]] || die "missing $TFVARS
+
+ensure_tfvars() {
+  [[ -f "$TFVARS" ]] && return 0
+  if [[ -n "${GCP_PROJECT_ID:-}" && -n "${GCP_REGION:-}" ]]; then
+    printf 'project_id = "%s"\nregion     = "%s"\n' "${GCP_PROJECT_ID}" "${GCP_REGION}" >"$TFVARS"
+    echo "==> created $TFVARS from GCP_PROJECT_ID and GCP_REGION (gitignored)"
+    return 0
+  fi
+  die "missing $TFVARS
 
   Create it from the example (gitignored — never committed), then set real project_id and region:
     cp \"$TF_DIR/terraform.tfvars.example\" \"$TFVARS\"
-    nano \"$TFVARS\"   # or use the Cloud Shell editor; replace your-gcp-project-id with your GCP project id"
+    nano \"$TFVARS\"   # replace your-gcp-project-id with your GCP project id
+
+  Or pass project and region once (writes the same file), then re-run without those vars if you prefer:
+    GCP_PROJECT_ID=\"\$(gcloud config get-value project)\" GCP_REGION=us-central1 ./deployment/scripts/deploy-platform.sh $ENV [terraform_state_bucket] [gcs_bucket_location]"
+}
+
+ensure_tfvars
 
 # Read first assignment of key = "value" or key = value from HCL-ish tfvars (no nested blocks).
 tfvar_get() {
