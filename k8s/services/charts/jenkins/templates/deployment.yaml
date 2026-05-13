@@ -56,6 +56,9 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.security.localAdmin.existingSecret | required "security.localAdmin.existingSecret is required when security.localAdmin.enabled is true" }}
                   key: {{ .Values.security.localAdmin.existingSecretKey }}
+                  {{- if .Values.security.localAdmin.optionalSecret }}
+                  optional: true
+                  {{- end }}
             {{- end }}
           {{- if .Values.startupProbe.enabled }}
           startupProbe:

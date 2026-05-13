@@ -13,14 +13,16 @@
 #   or terraform output jenkins_image_repository. deploy-platform.sh exports JENKINS_IMAGE_REPOSITORY when
 #   ARTIFACT_REGISTRY_REPOSITORY is set (with project/region from terraform.tfvars).
 #
-# Login / security (required for prod):
+# Login / security (required for prod — create Secret before install or rollout will fail):
 #   kubectl create secret generic jenkins-admin -n prod-estateflow --from-literal=password='YOUR_STRONG_PASSWORD'
 #
 # Helm SSA conflict on Service: HELM_UPGRADE_FORCE=1 ./k8s/scripts/deploy.sh prod jenkins — or delete the Service and redeploy.
+# Helm 4+: uses --server-side=false --force-replace; older Helm uses --force.
 
 security:
   localAdmin:
     enabled: true
+    optionalSecret: false
     username: admin
     existingSecret: jenkins-admin
     existingSecretKey: password

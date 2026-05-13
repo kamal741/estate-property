@@ -16,17 +16,18 @@
 #   or terraform output jenkins_image_repository. deploy-platform.sh exports JENKINS_IMAGE_REPOSITORY when
 #   ARTIFACT_REGISTRY_REPOSITORY is set (with project/region from terraform.tfvars).
 #
-# Login / security: create the Secret in the Jenkins namespace before install (or rotate and restart the pod):
+# Login / security: for **enforced** login, create the Secret then restart the controller pod (or set optionalSecret: false):
 #   kubectl create secret generic jenkins-admin -n dev-estateflow --from-literal=password='YOUR_STRONG_PASSWORD'
-# Init script 01-configureSecurityRealm.groovy enables Hudson private security + full control once logged in
-# (anonymous access off). Rebuild the controller image after changing init.groovy.d.
+# With optionalSecret: true (dev default), Helm can install before the Secret exists; init enables security only after the env is set (create Secret + rollout restart).
 #
 # Helm SSA conflict on Service (e.g. "conflict with kubectl-patch" on spec.type): the Service was changed outside Helm.
 # One-time fix: HELM_UPGRADE_FORCE=1 ./k8s/scripts/deploy.sh dev jenkins — or kubectl delete svc jenkins -n dev-estateflow then redeploy.
+# Helm 4+: HELM_UPGRADE_FORCE runs --server-side=false --force-replace; older Helm uses --force.
 
 security:
   localAdmin:
     enabled: true
+    optionalSecret: true
     username: admin
     existingSecret: jenkins-admin
     existingSecretKey: password

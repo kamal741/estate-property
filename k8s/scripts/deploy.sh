@@ -37,8 +37,8 @@ show_usage() {
     Trailing args are applied after this script’s --set-string flags, so they win for the same key.
   Jenkins Helm namespace: defaults to Terraform output gke_namespace (e.g. dev-estateflow), else <env>-estateflow.
     Override with NAMESPACE=... or JENKINS_HELM_NAMESPACE=... (NAMESPACE wins).
-  Helm upgrades: HELM_UPGRADE_FORCE=1 adds helm --force (replace resources) — use once if SSA reports a conflict
-    (e.g. Service spec.type was changed with kubectl patch outside Helm).
+  Helm upgrades: HELM_UPGRADE_FORCE=1 fixes SSA field conflicts by forcing resource replacement. On Helm 4+ this uses
+    --server-side=false --force-replace (they cannot be combined with SSA). On older Helm, --force is used instead.
   Extra helm args: any other `helm upgrade` flags (e.g. --set key=val, --dry-run).
 EOF
 }
@@ -152,10 +152,17 @@ helm_upgrade() {
   fi
 
   local helm_upgrade_extra=()
-  [[ "${HELM_UPGRADE_FORCE:-}" == "1" ]] && {
-    helm_upgrade_extra+=(--force)
-    echo "    (HELM_UPGRADE_FORCE=1: passing --force to helm upgrade — replaces conflicting resources)"
-  }
+  if [[ "${HELM_UPGRADE_FORCE:-}" == "1" ]]; then
+    local helm_help
+    helm_help="$(helm upgrade -h 2>&1 || true)"
+    if grep -q -- '--force-replace' <<<"$helm_help" && grep -q -- '--server-side' <<<"$helm_help"; then
+      helm_upgrade_extra+=(--server-side=false --force-replace)
+      echo "    (HELM_UPGRADE_FORCE=1: helm --server-side=false --force-replace)"
+    else
+      helm_upgrade_extra+=(--force)
+      echo "    (HELM_UPGRADE_FORCE=1: helm --force)"
+    fi
+  fi
 
   echo "==> helm upgrade --install release=$release namespace=$ns (env=$env service=$service)"
   echo "    $chart"
