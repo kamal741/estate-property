@@ -23,7 +23,55 @@
 #   JENKINS_IMAGE_TAG          Optional; defaults to <env> (dev or prod) to match k8s/env/<env>/jenkins-values.yaml tags.
 #   JENKINS_IMAGE_REPOSITORY   Optional full image path without tag; if unset, deploy.sh may fill from Terraform output.
 #   SKIP_JENKINS_IMAGE_REPOSITORY_AUTO=1  Do not auto-set JENKINS_IMAGE_REPOSITORY from ARTIFACT_REGISTRY_REPOSITORY / TF.
-#   GCP_PROJECT_ID / GCP_REGION  If terraform.tfvars is missing, both may be set to create it (gitignored) and continue.
+#   GCP_PROJECT_ID / GCP_REGION  If terraform.tfvars is missing and both are set, create that file (gitignored).
+#   REQUIRE_MANUAL_TFVARS=1    If terraform.tfvars is missing, do not auto-create from gcloud; require a manual file
+#                             or GCP_PROJECT_ID+GCP_REGION.
+#   TERRAFORM_INIT_EXTRA       Extra args to terraform init (e.g. -reconfigure).
+#   TERRAFORM_APPLY_EXTRA      Extra args to terraform apply (e.g. -target=...).
+#
+# --- Command combinations (repo root; dev examples; use prod where needed) -----------------
+#
+#   # 1) Default state bucket estateflow-bucket-dev; if terraform.tfvars is missing, it is created from gcloud
+#   #    active project + region (GCP_REGION or compute/region or us-central1). Opt out: REQUIRE_MANUAL_TFVARS=1
+#   ./deployment/scripts/deploy-platform.sh dev
+#
+#   # 2) Explicit Terraform remote state bucket + bucket location (2nd and 3rd args)
+#   ./deployment/scripts/deploy-platform.sh dev dev-estateflow-bucket us-central1
+#
+#   # 2b) Override state bucket / location via env (wins over positional args when set — see STATE_BUCKET= in script)
+#   TERRAFORM_STATE_BUCKET=my-tf-state GCS_STATE_BUCKET_LOCATION=us-east1 ./deployment/scripts/deploy-platform.sh dev
+#
+#   # 3) Force manual terraform.tfvars (do not auto-create from gcloud)
+#   REQUIRE_MANUAL_TFVARS=1 ./deployment/scripts/deploy-platform.sh dev
+#
+#   # 3b) Explicit project/region when tfvars is missing (no gcloud required)
+#   GCP_PROJECT_ID=my-proj GCP_REGION=us-central1 ./deployment/scripts/deploy-platform.sh dev dev-estateflow-bucket us-central1
+#   # 4) Helm only (kubecontext must already target the cluster; no terraform.tfvars required)
+#   HELM_ONLY=1 ./deployment/scripts/deploy-platform.sh dev
+#
+#   # 5) Skip Terraform apply (still bootstrap if not skipped, init, kube sync, Helm)
+#   SKIP_TERRAFORM=1 ./deployment/scripts/deploy-platform.sh dev
+#
+#   # 6) Skip apply + skip kubeconfig refresh (kubectl already correct)
+#   SKIP_TERRAFORM=1 SKIP_KUBECONFIG_SYNC=1 ./deployment/scripts/deploy-platform.sh dev
+#
+#   # 7) State bucket already exists — skip API enable + bucket create
+#   SKIP_GCLOUD_BOOTSTRAP=1 ./deployment/scripts/deploy-platform.sh dev dev-estateflow-bucket us-central1
+#
+#   # 8) Build/push Jenkins image to Artifact Registry, then Helm (needs Docker; AR repo must exist)
+#   ARTIFACT_REGISTRY_REPOSITORY=estateflow-dev BUILD_PUSH_JENKINS_IMAGE=1 ./deployment/scripts/deploy-platform.sh dev
+#
+#   # 9) Push with custom controller tag (defaults to env name dev/prod)
+#   ARTIFACT_REGISTRY_REPOSITORY=estateflow-dev BUILD_PUSH_JENKINS_IMAGE=1 JENKINS_IMAGE_TAG=v1.0.0 \
+#     ./deployment/scripts/deploy-platform.sh dev
+#
+#   # 10) Do not auto-export JENKINS_IMAGE_REPOSITORY for Helm (use values/chart only)
+#   SKIP_JENKINS_IMAGE_REPOSITORY_AUTO=1 ./deployment/scripts/deploy-platform.sh dev
+#
+#   # 11) Terraform init after backend change
+#   TERRAFORM_INIT_EXTRA=-reconfigure ./deployment/scripts/deploy-platform.sh dev dev-estateflow-bucket us-central1
+#
+# --------------------------------------------------------------------------------------------
 
 set -euo pipefail
 
@@ -35,8 +83,8 @@ die() { echo "error: $*" >&2; exit 1; }
 usage() {
   die "usage: $0 <dev|prod> [terraform_state_bucket] [gcs_bucket_location]
   HELM_ONLY=1 $0 <env>  — only Helm (Jenkins + platform-ingress); no Terraform.
-  Otherwise requires terraform.tfvars under deployment/terraform/envs/<env>/ (project_id, region), or set
-  GCP_PROJECT_ID and GCP_REGION to create that file automatically when it is missing."
+  Otherwise needs deployment/terraform/envs/<env>/terraform.tfvars (copy from .example), or
+  GCP_PROJECT_ID+GCP_REGION, or gcloud on PATH with a configured project (auto-writes tfvars when missing)."
 }
 
 [[ "${1:-}" ]] || usage
@@ -66,19 +114,42 @@ DOCKER_BUILD_PUSH="$REPO_ROOT/k8s/scripts/docker-build-push-gcp-ar.sh"
 
 ensure_tfvars() {
   [[ -f "$TFVARS" ]] && return 0
+
   if [[ -n "${GCP_PROJECT_ID:-}" && -n "${GCP_REGION:-}" ]]; then
     printf 'project_id = "%s"\nregion     = "%s"\n' "${GCP_PROJECT_ID}" "${GCP_REGION}" >"$TFVARS"
     echo "==> created $TFVARS from GCP_PROJECT_ID and GCP_REGION (gitignored)"
     return 0
   fi
+
+  if [[ "${REQUIRE_MANUAL_TFVARS:-}" == "1" ]]; then
+    :
+  elif command -v gcloud >/dev/null 2>&1; then
+    local pid reg
+    pid="$(gcloud config get-value project 2>/dev/null | tr -d '\r\n' || true)"
+    if [[ -n "$pid" && "$pid" != "(unset)" ]]; then
+      reg="${GCP_REGION:-}"
+      if [[ -z "$reg" ]]; then
+        reg="$(gcloud config get-value compute/region 2>/dev/null | tr -d '\r\n' || true)"
+      fi
+      if [[ -z "$reg" || "$reg" == "(unset)" ]]; then
+        reg=us-central1
+      fi
+      printf 'project_id = "%s"\nregion     = "%s"\n' "$pid" "$reg" >"$TFVARS"
+      echo "==> created $TFVARS from gcloud (project=$pid region=$reg; override with GCP_REGION or edit file)"
+      return 0
+    fi
+  fi
+
   die "missing $TFVARS
 
   Create it from the example (gitignored — never committed), then set real project_id and region:
     cp \"$TF_DIR/terraform.tfvars.example\" \"$TFVARS\"
-    nano \"$TFVARS\"   # replace your-gcp-project-id with your GCP project id
+    nano \"$TFVARS\"
 
-  Or pass project and region once (writes the same file), then re-run without those vars if you prefer:
-    GCP_PROJECT_ID=\"\$(gcloud config get-value project)\" GCP_REGION=us-central1 ./deployment/scripts/deploy-platform.sh $ENV [terraform_state_bucket] [gcs_bucket_location]"
+  Or set project and region explicitly:
+    GCP_PROJECT_ID=\"\$(gcloud config get-value project)\" GCP_REGION=us-central1 ./deployment/scripts/deploy-platform.sh $ENV
+
+  Or install/configure gcloud so \`gcloud config get-value project\` returns your project (then re-run without tfvars)."
 }
 
 ensure_tfvars
