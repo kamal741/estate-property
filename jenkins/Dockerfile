@@ -73,7 +73,7 @@ ENV POSTGRES_VERSION=42.7.3
 RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar \
     -O /usr/local/lib/postgresql.jar
 
-ENV CLASSPATH="/usr/local/lib/postgresql.jar:${CLASSPATH}"
+ENV CLASSPATH="/usr/local/lib/postgresql.jar"
 
 # -----------------------
 # kubectl (PUBLIC)
@@ -127,13 +127,13 @@ ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
 # -----------------------
 # Jenkins config
 # -----------------------
-COPY init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
+COPY jenkins/init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
 #COPY jenkins/init.jcasc/ /usr/share/jenkins/ref/init.jcasc/
-COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
 
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
-COPY safeShutdown.sh ./
+COPY jenkins/safeShutdown.sh ./
 
 # -----------------------
 # Metadata
