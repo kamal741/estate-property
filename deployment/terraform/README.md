@@ -1,6 +1,6 @@
 # EstateFlow Terraform (GCP)
 
-This layout uses **one state per environment** under `terraform/envs/{dev,prod}/` and a shared module in `terraform/modules/core-infra/`.
+This layout uses **one state per environment** under `deployment/terraform/envs/{dev,prod}/` and a shared module in `deployment/terraform/modules/core-infra/`.
 
 ## Prerequisites
 
@@ -14,7 +14,7 @@ This layout uses **one state per environment** under `terraform/envs/{dev,prod}/
 1. Copy variables for the environment you are applying:
 
    ```bash
-   cp terraform/envs/dev/terraform.tfvars.example terraform/envs/dev/terraform.tfvars
+   cp deployment/terraform/envs/dev/terraform.tfvars.example deployment/terraform/envs/dev/terraform.tfvars
    ```
 
 2. Edit `terraform.tfvars` and set `project_id` and `region`. **Do not commit** `terraform.tfvars` (it is gitignored).
@@ -24,11 +24,13 @@ This layout uses **one state per environment** under `terraform/envs/{dev,prod}/
 4. Initialize and apply from the env directory:
 
    ```bash
-   cd terraform/envs/dev
+   cd deployment/terraform/envs/dev
    terraform init
    terraform plan
    terraform apply
    ```
+
+   From the repo root, **`deployment/scripts/deploy-platform.sh`** runs **`terraform init`** in that env directory before **`apply`**, so a fresh clone (for example Cloud Shell) does not require a manual **`init`** first. If Terraform reports a backend configuration change, run once with **`TERRAFORM_INIT_EXTRA=-reconfigure`** (see that script’s header comment).
 
 ## Secrets and passwords
 

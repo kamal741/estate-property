@@ -7,9 +7,11 @@
 #
 # Environment:
 #   SKIP_TERRAFORM=1     Skip terraform apply (only refresh kubeconfig + Helm).
-#   TERRAFORM_APPLY_EXTRA  Extra args for terraform apply (e.g. -target=module.infra.google_container_cluster.primary)
+#   TERRAFORM_APPLY_EXTRA   Extra args for terraform apply (e.g. -target=...)
+#   TERRAFORM_INIT_EXTRA    Extra args for terraform init (e.g. -reconfigure after backend change)
 #
-# Requires: terraform, gcloud, helm, kubectl; GCP auth; terraform init in env dir.
+# Requires: terraform, gcloud, helm, kubectl; GCP auth (e.g. Cloud Shell).
+# Runs terraform init before apply or output (GCS backend, etc.).
 
 set -euo pipefail
 
@@ -28,6 +30,14 @@ K8S_HELM="$REPO_ROOT/k8s/scripts/deploy.sh"
 [[ -d "$TF_DIR" ]] || die "missing terraform env: $TF_DIR"
 [[ -f "$K8S_HELM" ]] || die "missing k8s/scripts/deploy.sh"
 
+tf_init() {
+  pushd "$TF_DIR" >/dev/null || exit 1
+  echo "==> terraform init ($ENV)"
+  # shellcheck disable=SC2086
+  terraform init -input=false ${TERRAFORM_INIT_EXTRA:-}
+  popd >/dev/null || true
+}
+
 tf_apply() {
   pushd "$TF_DIR" >/dev/null || exit 1
   echo "==> terraform apply ($ENV)"
@@ -44,6 +54,8 @@ sync_kube() {
   eval "$cmd"
   popd >/dev/null || true
 }
+
+tf_init
 
 if [[ "${SKIP_TERRAFORM:-}" != "1" ]]; then
   tf_apply
