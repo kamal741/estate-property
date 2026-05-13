@@ -5,7 +5,7 @@
 #   ./k8s/scripts/deploy.sh dev jenkins --set-string image.tag=v1.0.0
 #   JENKINS_IMAGE_TAG=v1.0.0 ./k8s/scripts/deploy.sh dev jenkins
 # GKE: SYNC_GKE_KUBECONFIG=1 runs terraform output gke_get_credentials_command in deployment/terraform/envs/<env>/
-# Helm env vars: RELEASE, NAMESPACE, JENKINS_HELM_NAMESPACE, JENKINS_IMAGE_TAG, JENKINS_IMAGE_REPOSITORY, … ./k8s/scripts/deploy.sh --help
+# Helm env vars: RELEASE, NAMESPACE, JENKINS_HELM_NAMESPACE, JENKINS_IMAGE_TAG, JENKINS_IMAGE_REPOSITORY, HELM_UPGRADE_FORCE=1, … ./k8s/scripts/deploy.sh --help
 
 set -euo pipefail
 
@@ -37,6 +37,8 @@ show_usage() {
     Trailing args are applied after this script’s --set-string flags, so they win for the same key.
   Jenkins Helm namespace: defaults to Terraform output gke_namespace (e.g. dev-estateflow), else <env>-estateflow.
     Override with NAMESPACE=... or JENKINS_HELM_NAMESPACE=... (NAMESPACE wins).
+  Helm upgrades: HELM_UPGRADE_FORCE=1 adds helm --force (replace resources) — use once if SSA reports a conflict
+    (e.g. Service spec.type was changed with kubectl patch outside Helm).
   Extra helm args: any other `helm upgrade` flags (e.g. --set key=val, --dry-run).
 EOF
 }
@@ -149,6 +151,12 @@ helm_upgrade() {
     fi
   fi
 
+  local helm_upgrade_extra=()
+  [[ "${HELM_UPGRADE_FORCE:-}" == "1" ]] && {
+    helm_upgrade_extra+=(--force)
+    echo "    (HELM_UPGRADE_FORCE=1: passing --force to helm upgrade — replaces conflicting resources)"
+  }
+
   echo "==> helm upgrade --install release=$release namespace=$ns (env=$env service=$service)"
   echo "    $chart"
   echo "    -f $values"
@@ -158,6 +166,7 @@ helm_upgrade() {
     --create-namespace \
     --values "$values" \
     "${jenkins_image_overrides[@]}" \
+    "${helm_upgrade_extra[@]}" \
     "$@"
 }
 

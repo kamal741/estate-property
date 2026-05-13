@@ -20,6 +20,9 @@
 #   kubectl create secret generic jenkins-admin -n dev-estateflow --from-literal=password='YOUR_STRONG_PASSWORD'
 # Init script 01-configureSecurityRealm.groovy enables Hudson private security + full control once logged in
 # (anonymous access off). Rebuild the controller image after changing init.groovy.d.
+#
+# Helm SSA conflict on Service (e.g. "conflict with kubectl-patch" on spec.type): the Service was changed outside Helm.
+# One-time fix: HELM_UPGRADE_FORCE=1 ./k8s/scripts/deploy.sh dev jenkins — or kubectl delete svc jenkins -n dev-estateflow then redeploy.
 
 security:
   localAdmin:
