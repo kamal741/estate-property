@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "jenkins.fullname" . }}
+  labels:
+    {{- include "jenkins.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    {{- if .Values.agentListener.enabled }}
+    - port: {{ .Values.service.agentPort }}
+      targetPort: agent
+      protocol: TCP
+      name: agent
+    {{- end }}
+  selector:
+    {{- include "jenkins.selectorLabels" . | nindent 4 }}

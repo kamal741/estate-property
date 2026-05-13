@@ -1,0 +1,13 @@
+# Single place to declare public hostnames → ClusterIP Services (any namespace).
+# Install with env-specific -f, e.g. k8s/env/dev/platform-ingress-values.yaml
+#
+# ingressClassName: only set if your cluster defines networking.k8s.io/IngressClass
+# (e.g. azure-application-gateway, traefik, webapprouting). Leave "" to omit the field.
+
+nameOverride: ""
+fullnameOverride: ""
+
+ingressClassName: ""
+
+# Each item becomes one Ingress in .namespace (standard Ingress cannot span namespaces in one object).
+routes: []

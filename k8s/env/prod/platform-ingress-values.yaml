@@ -1,0 +1,40 @@
+# Prod routes for platform-ingress.
+#
+# Deploy (from repo root):
+#   ./k8s/scripts/deploy.sh prod platform-ingress
+#
+# Or manually:
+#   helm upgrade --install platform-ingress k8s/services/charts/platform-ingress \
+#     -n kube-system --create-namespace -f k8s/env/prod/platform-ingress-values.yaml
+#
+# Point DNS and TLS secrets at these hosts before switching traffic.
+#
+# Optional: set only if your ingress controller registers an IngressClass:
+# ingressClassName: azure-application-gateway
+
+routes:
+  - name: jenkins-ui
+    namespace: jenkins
+    host: jenkins.prod.example.com
+    serviceName: jenkins
+    servicePort: 8080
+    path: /
+    pathType: Prefix
+    labels:
+      app.kubernetes.io/name: jenkins
+      app.kubernetes.io/component: ingress
+
+  - name: spring-boot-api
+    namespace: apps
+    host: api.prod.example.com
+    serviceName: api
+    servicePort: 8080
+    path: /
+    pathType: Prefix
+    labels:
+      app.kubernetes.io/component: ingress
+
+# Optional TLS: add under the matching route item (same indent as `labels:`):
+#   tls:
+#     - hosts: [jenkins.prod.example.com]
+#       secretName: jenkins-prod-tls

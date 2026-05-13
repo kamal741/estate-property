@@ -1,0 +1,6 @@
+apiVersion: v2
+name: platform-ingress
+description: Shared HTTP routing for Jenkins, Spring Boot services, and internal tools (one values list).
+type: application
+version: 0.1.0
+appVersion: "1.0"

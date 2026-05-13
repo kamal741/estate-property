@@ -1,0 +1,77 @@
+# Default values for the estate-property Jenkins chart.
+# Build the image from repo root: docker build -f jenkins/Dockerfile -t <registry>/jenkins:<tag> .
+
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: estate-property/jenkins
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+
+service:
+  type: ClusterIP
+  port: 8080
+  agentPort: 50000
+  annotations: {}
+
+agentListener:
+  enabled: true
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  mountPath: /var/jenkins_home
+
+resources:
+  limits:
+    cpu: "2"
+    memory: 3Gi
+  requests:
+    cpu: "500m"
+    memory: 1536Mi
+
+javaOpts: "-XX:+UseG1GC -Djenkins.install.runSetupWizard=false"
+
+extraEnv: []
+
+livenessProbe:
+  path: /login
+  initialDelaySeconds: 120
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+readinessProbe:
+  path: /login
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 10
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

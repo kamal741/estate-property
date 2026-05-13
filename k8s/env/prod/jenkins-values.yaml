@@ -1,0 +1,31 @@
+# Prod overrides for the Jenkins chart (flat values schema).
+#
+# Deploy (from repo root):
+#   ./k8s/scripts/deploy.sh prod jenkins
+#
+# Or manually:
+#   helm upgrade --install jenkins k8s/services/charts/jenkins -n jenkins --create-namespace \
+#     -f k8s/env/prod/jenkins-values.yaml
+#
+# Build and push image (example):
+#   docker build -f jenkins/Dockerfile -t <registry>/estate-property/jenkins:<prod-tag> .
+
+image:
+  repository: estate-property/jenkins
+  tag: prod
+  pullPolicy: IfNotPresent
+
+persistence:
+  enabled: true
+  size: 50Gi
+  # storageClass: gp3
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: 2Gi
+  limits:
+    cpu: "4"
+    memory: 6Gi
+
+javaOpts: "-XX:+UseG1GC -Djenkins.install.runSetupWizard=false -Xms1g -Xmx5g"

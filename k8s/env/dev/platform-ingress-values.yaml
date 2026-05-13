@@ -1,0 +1,40 @@
+# Dev routes for platform-ingress.
+#
+# Deploy (from repo root):
+#   ./k8s/scripts/deploy.sh dev platform-ingress
+#
+# Or manually:
+#   helm upgrade --install platform-ingress k8s/services/charts/platform-ingress \
+#     -n kube-system --create-namespace -f k8s/env/dev/platform-ingress-values.yaml
+#
+# Add more services later: copy a route block, or add k8s/env/dev/<app>-values.yaml and a matching `helm install` for that chart.
+#
+# Optional: set only if your ingress controller registers an IngressClass:
+# ingressClassName: azure-application-gateway
+
+routes:
+  - name: jenkins-ui
+    namespace: jenkins
+    host: jenkins.dev.example.com
+    serviceName: jenkins
+    servicePort: 8080
+    path: /
+    pathType: Prefix
+    labels:
+      app.kubernetes.io/name: jenkins
+      app.kubernetes.io/component: ingress
+
+  - name: spring-boot-api
+    namespace: apps
+    host: api.dev.example.com
+    serviceName: api
+    servicePort: 8080
+    path: /
+    pathType: Prefix
+    labels:
+      app.kubernetes.io/component: ingress
+
+# Optional per-route TLS (add under that route item):
+#   tls:
+#     - hosts: [api.dev.example.com]
+#       secretName: api-dev-tls

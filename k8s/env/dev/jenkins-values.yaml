@@ -1,0 +1,31 @@
+# Dev overrides for the Jenkins chart (flat values schema).
+#
+# Deploy (from repo root):
+#   ./k8s/scripts/deploy.sh dev jenkins
+#
+# Or manually:
+#   helm upgrade --install jenkins k8s/services/charts/jenkins -n jenkins --create-namespace \
+#     -f k8s/env/dev/jenkins-values.yaml
+#
+# Build image (example):
+#   docker build -f jenkins/Dockerfile -t <registry>/estate-property/jenkins:dev .
+
+image:
+  repository: estate-property/jenkins
+  tag: dev
+  pullPolicy: IfNotPresent
+
+persistence:
+  enabled: true
+  size: 20Gi
+  # storageClass: gp3
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 3Gi
+
+javaOpts: "-XX:+UseG1GC -Djenkins.install.runSetupWizard=false -Xms512m -Xmx2048m"
