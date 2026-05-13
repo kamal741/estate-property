@@ -26,7 +26,8 @@
 #   GCP_PROJECT_ID / GCP_REGION  If terraform.tfvars is missing and both are set, create that file (gitignored).
 #   REQUIRE_MANUAL_TFVARS=1    If terraform.tfvars is missing, do not auto-create from gcloud; require a manual file
 #                             or GCP_PROJECT_ID+GCP_REGION.
-#   TERRAFORM_INIT_EXTRA       Extra args to terraform init (e.g. -reconfigure).
+#   TERRAFORM_INIT_EXTRA       Extra args to terraform init (e.g. -reconfigure after backend metadata change;
+#                             or -migrate-state when moving state to a new bucket — see Terraform message).
 #   TERRAFORM_APPLY_EXTRA      Extra args to terraform apply (e.g. -target=...).
 #
 # --- Command combinations (repo root; dev examples; use prod where needed) -----------------
@@ -68,8 +69,11 @@
 #   # 10) Do not auto-export JENKINS_IMAGE_REPOSITORY for Helm (use values/chart only)
 #   SKIP_JENKINS_IMAGE_REPOSITORY_AUTO=1 ./deployment/scripts/deploy-platform.sh dev
 #
-#   # 11) Terraform init after backend change
+#   # 11) Terraform init: "Backend configuration changed" — same bucket, refresh local config (try this first)
 #   TERRAFORM_INIT_EXTRA=-reconfigure ./deployment/scripts/deploy-platform.sh dev dev-estateflow-bucket us-central1
+#
+#   # 11b) Moving state to a new backend bucket (follow Terraform prompts)
+#   TERRAFORM_INIT_EXTRA=-migrate-state ./deployment/scripts/deploy-platform.sh dev NEW_BUCKET_NAME us-central1
 #
 # --------------------------------------------------------------------------------------------
 
