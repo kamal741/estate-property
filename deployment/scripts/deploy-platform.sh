@@ -10,8 +10,10 @@
 #   HELM_ONLY=1 ./deployment/scripts/deploy-platform.sh dev    # only Jenkins + platform-ingress Helm
 #
 # Environment:
-#   HELM_ONLY=1               Only run Helm (Jenkins + platform-ingress). Skips gcloud bootstrap, terraform,
-#                             and kubeconfig sync — your kubecontext must already target the right cluster.
+#   HELM_ONLY=1               Only run Helm (Jenkins + platform-ingress) by default — skips gcloud bootstrap, terraform,
+#                             and kubeconfig sync; kubecontext must already target the cluster.
+#                             If BUILD_PUSH_JENKINS_IMAGE=1 as well, runs Docker build/push first (needs terraform.tfvars
+#                             or GCP_PROJECT_ID+GCP_REGION for project/region; needs ARTIFACT_REGISTRY_REPOSITORY).
 #   SKIP_TERRAFORM=1          Skip terraform apply only (still runs bootstrap, init, kube sync, then Helm).
 #   SKIP_KUBECONFIG_SYNC=1    Skip terraform output get-credentials (use with SKIP_TERRAFORM=1 if kubeconfig OK).
 #   SKIP_GCLOUD_BOOTSTRAP=1   Skip gcloud API enable + state bucket create (use when bucket already exists).
@@ -47,6 +49,10 @@
 #
 #   # 3b) Explicit project/region when tfvars is missing (no gcloud required)
 #   GCP_PROJECT_ID=my-proj GCP_REGION=us-central1 ./deployment/scripts/deploy-platform.sh dev dev-estateflow-bucket us-central1
+#   # 4b) Helm only + build/push Jenkins first (no Terraform; needs tfvars or GCP_* for project/region + Docker)
+#   ARTIFACT_REGISTRY_REPOSITORY=estateflow-dev BUILD_PUSH_JENKINS_IMAGE=1 HELM_ONLY=1 JENKINS_IMAGE_TAG=v1.0.0 \
+#     ./deployment/scripts/deploy-platform.sh dev
+#
 #   # 4) Helm only (kubecontext must already target the cluster; no terraform.tfvars required)
 #   HELM_ONLY=1 ./deployment/scripts/deploy-platform.sh dev
 #
@@ -86,7 +92,8 @@ die() { echo "error: $*" >&2; exit 1; }
 
 usage() {
   die "usage: $0 <dev|prod> [terraform_state_bucket] [gcs_bucket_location]
-  HELM_ONLY=1 $0 <env>  — only Helm (Jenkins + platform-ingress); no Terraform.
+  HELM_ONLY=1 $0 <env>  — only Helm (Jenkins + platform-ingress); no Terraform. With BUILD_PUSH_JENKINS_IMAGE=1, also
+  build/push Jenkins first (needs terraform.tfvars or GCP_PROJECT_ID+GCP_REGION, Docker, ARTIFACT_REGISTRY_REPOSITORY).
   Otherwise needs deployment/terraform/envs/<env>/terraform.tfvars (copy from .example), or
   GCP_PROJECT_ID+GCP_REGION, or gcloud on PATH with a configured project (auto-writes tfvars when missing)."
 }
@@ -101,20 +108,20 @@ TFVARS="$TF_DIR/terraform.tfvars"
 [[ -d "$TF_DIR" ]] || die "missing terraform env: $TF_DIR"
 [[ -f "$K8S_HELM" ]] || die "missing k8s/scripts/deploy.sh"
 
-helm_only() {
-  echo "==> HELM_ONLY=1 — Helm only (Jenkins + platform-ingress); kubecontext must already target the cluster"
-  bash "$K8S_HELM" helm "$ENV" jenkins
-  bash "$K8S_HELM" helm "$ENV" platform-ingress
-  echo "==> done."
-}
-
-if [[ "${HELM_ONLY:-}" == "1" ]]; then
-  helm_only
-  exit 0
-fi
-
 DOCKER_BUILD_PUSH="$REPO_ROOT/k8s/scripts/docker-build-push-gcp-ar.sh"
-[[ -f "$DOCKER_BUILD_PUSH" ]] || die "missing k8s/scripts/docker-build-push-gcp-ar.sh"
+
+# Read first assignment of key = "value" or key = value from HCL-ish tfvars (no nested blocks).
+tfvar_get() {
+  local key="$1" line val
+  line=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$TFVARS" | head -1) || return 1
+  val="${line#*=}"
+  val="${val%%#*}"
+  val="${val//\"/}"
+  val="${val//\'}"
+  val="${val#"${val%%[![:space:]]*}"}"
+  val="${val%"${val##*[![:space:]]}"}"
+  printf '%s' "$val"
+}
 
 ensure_tfvars() {
   [[ -f "$TFVARS" ]] && return 0
@@ -156,20 +163,46 @@ ensure_tfvars() {
   Or install/configure gcloud so \`gcloud config get-value project\` returns your project (then re-run without tfvars)."
 }
 
-ensure_tfvars
-
-# Read first assignment of key = "value" or key = value from HCL-ish tfvars (no nested blocks).
-tfvar_get() {
-  local key="$1" line val
-  line=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$TFVARS" | head -1) || return 1
-  val="${line#*=}"
-  val="${val%%#*}"
-  val="${val//\"/}"
-  val="${val//\'}"
-  val="${val#"${val%%[![:space:]]*}"}"
-  val="${val%"${val##*[![:space:]]}"}"
-  printf '%s' "$val"
+helm_only() {
+  echo "==> HELM_ONLY=1 — Helm only (Jenkins + platform-ingress); kubecontext must already target the cluster"
+  bash "$K8S_HELM" helm "$ENV" jenkins
+  bash "$K8S_HELM" helm "$ENV" platform-ingress
+  echo "==> done."
 }
+
+if [[ "${HELM_ONLY:-}" == "1" ]]; then
+  if [[ "${BUILD_PUSH_JENKINS_IMAGE:-}" == "1" ]]; then
+    [[ -f "$DOCKER_BUILD_PUSH" ]] || die "missing k8s/scripts/docker-build-push-gcp-ar.sh"
+    ensure_tfvars
+    PROJECT_ID="$(tfvar_get project_id)" || die "HELM_ONLY+BUILD_PUSH_JENKINS_IMAGE needs $TFVARS with project_id (or set GCP_PROJECT_ID+GCP_REGION so this script can create it)"
+    REGION="$(tfvar_get region)" || die "HELM_ONLY+BUILD_PUSH_JENKINS_IMAGE needs $TFVARS with region"
+    [[ -n "$PROJECT_ID" ]] || die "project_id is empty in $TFVARS"
+    [[ -n "$REGION" ]] || die "region is empty in $TFVARS"
+    [[ -n "${ARTIFACT_REGISTRY_REPOSITORY:-}" ]] ||
+      die "ARTIFACT_REGISTRY_REPOSITORY is required when BUILD_PUSH_JENKINS_IMAGE=1 (Artifact Registry repository id, e.g. estateflow-dev)"
+    local jtag="${JENKINS_IMAGE_TAG:-$ENV}"
+    echo "==> HELM_ONLY + BUILD_PUSH_JENKINS_IMAGE=1 — build and push Jenkins (${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/jenkins:${jtag})"
+    bash "$DOCKER_BUILD_PUSH" \
+      --project "$PROJECT_ID" \
+      --region "$REGION" \
+      --repository "$ARTIFACT_REGISTRY_REPOSITORY" \
+      --image jenkins \
+      --tag "$jtag" \
+      --dockerfile jenkins/Dockerfile
+    if [[ "${SKIP_JENKINS_IMAGE_REPOSITORY_AUTO:-}" != "1" && -z "${JENKINS_IMAGE_REPOSITORY:-}" && -n "${ARTIFACT_REGISTRY_REPOSITORY:-}" ]]; then
+      export JENKINS_IMAGE_REPOSITORY="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/jenkins"
+      echo "==> JENKINS_IMAGE_REPOSITORY=$JENKINS_IMAGE_REPOSITORY (from project/region + ARTIFACT_REGISTRY_REPOSITORY)"
+    fi
+    helm_only
+    exit 0
+  fi
+  helm_only
+  exit 0
+fi
+
+[[ -f "$DOCKER_BUILD_PUSH" ]] || die "missing k8s/scripts/docker-build-push-gcp-ar.sh"
+
+ensure_tfvars
 
 PROJECT_ID="$(tfvar_get project_id)" || die "could not read project_id from $TFVARS"
 REGION="$(tfvar_get region)" || die "could not read region from $TFVARS"
