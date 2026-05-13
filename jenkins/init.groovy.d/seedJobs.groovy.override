@@ -48,6 +48,7 @@ if (curJob) {
     dslBuilder.setLookupStrategy(LookupStrategy.JENKINS_ROOT)
     builders.replace(dslBuilder)
     
+    
     //set the log rotator
     job.setLogRotator(new LogRotator(-1, 10, -1, -1))
     

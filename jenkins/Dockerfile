@@ -1,5 +1,9 @@
 FROM jenkins/jenkins:2.555.1-jdk21
 
+# Build from repository root (see README):
+#   docker build -f jenkins/Dockerfile -t <registry>/estate-property/jenkins:<tag> .
+# COPY paths are relative to that context (.), not this file's directory.
+
 USER root
 
 ENV KUBECTL_VERSION=v1.33.8
@@ -119,13 +123,13 @@ USER jenkins
 # -----------------------
 # Jenkins config
 # -----------------------
-COPY init.groovy.d/* /usr/share/jenkins/ref/init.groovy.d/
-#COPY init.jcasc/ /usr/share/jenkins/ref/init.jcasc/
-COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+COPY jenkins/init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
+#COPY jenkins/init.jcasc/ /usr/share/jenkins/ref/init.jcasc/
+COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
 
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
-COPY safeShutdown.sh ./
+COPY jenkins/safeShutdown.sh ./
 
 # -----------------------
 # Metadata

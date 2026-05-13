@@ -15,7 +15,7 @@ Monorepo for **EstateFlow** infrastructure and delivery: **GCP (Terraform)**, **
 | `k8s/env/<env>/` | Per-environment **Helm values** (`jenkins-values.yaml`, `platform-ingress-values.yaml`) and optional **`manifests/`** for raw **Kustomize** / `kubectl apply`. |
 | `k8s/scripts/deploy.sh` | Deploy any chart with env values, or `kubectl apply` / `-k`; optional **GKE kubeconfig** sync from Terraform outputs. |
 | `k8s/scripts/jenkins-gke-env-from-terraform.sh` | Prints **Terraform `jenkins_gke_context`** (cluster, namespaces, `gcloud get-credentials` command) for **Jenkins pipelines**—does not deploy workloads. |
-| `jenkins/` | **Dockerfile** and controller config: `plugins.txt`, `init.groovy.d/`, `safeShutdown.sh`. Build image from repo root: `docker build -f jenkins/Dockerfile -t <registry>/estate-property/jenkins:<tag> .` |
+| `jenkins/` | **Dockerfile** and controller config: `plugins.txt`, `init.groovy.d/`, `safeShutdown.sh`. **Build context must be the repo root** (the trailing `.` in the command): `docker build -f jenkins/Dockerfile -t <registry>/estate-property/jenkins:<tag> .` so `COPY jenkins/...` in the Dockerfile resolves. |
 | `jenkins-jobs/` | Job DSL Groovy consumed by the seed job (e.g. `Jenkins_Seed_DSL.groovy`, pipeline job definitions). |
 
 ---
@@ -136,7 +136,9 @@ Jenkins only runs **`init.groovy.d/*.groovy`** (name must **end with `.groovy`**
 This repo ships:
 
 - **`97-setCSRFAndScriptSecurity.groovy`** — runs your existing `preapproveAll()` + CSRF settings (same as the old `.override` file).
-- **`zzz-approvePendingJobDslScripts.groovy`** — after a short delay, calls **`approvePendingScripts()`** so whole-script approvals queued by the first Job DSL run are cleared (rebuild the controller image and restart, or approve once in the UI).
+- **`zzz-approvePendingJobDslScripts.groovy`** — calls **`approvePendingScripts()`** on a schedule for roughly the first hour after boot (plus early passes at 45s and 5m). That catches Job DSL whole-script approvals when the first seed run happens **after** those early windows—common in real use. Rebuild the controller image and restart the pod after changing this file.
+
+**If the seed still fails once:** wait up to about two minutes after the failure (next bootstrap pass) and **run the seed again**, or use **Manage Jenkins → In-process Script Approval** once.
 
 **Job DSL Groovy** under **`jenkins-jobs/`** should avoid **`Jenkins.instance`**, **`Hudson.instance.getItem`**, and similar core APIs; they stay pending until approved. **`Jenkins_Seed_DSL.groovy`** uses fixed defaults for parameters and schedule (tune values in the Jenkins UI after the first successful seed if needed).
 
