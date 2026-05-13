@@ -81,7 +81,28 @@ ENV CLASSPATH="/usr/local/lib/postgresql.jar"
 RUN curl -L -o /usr/local/bin/kubectl \
     https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl && \
     chmod +x /usr/local/bin/kubectl
-    
+
+# -----------------------
+# flux CLI
+# -----------------------
+RUN curl -s https://fluxcd.io/install.sh | bash
+
+# -----------------------
+# kustomize
+# -----------------------
+RUN curl -s https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh \
+    | bash -s /usr/local/bin
+
+# -----------------------
+# Redis CLI
+# -----------------------
+RUN cd /tmp && \
+    curl -L -o redis.tar.gz https://download.redis.io/releases/redis-${REDIS_VERSION}.tar.gz && \
+    tar xzf redis.tar.gz && \
+    make -j2 -C redis-${REDIS_VERSION} && \
+    cp redis-${REDIS_VERSION}/src/redis-cli /usr/local/bin && \
+    rm -rf /tmp/redis*
+
 # -----------------------
 # Cleanup
 # -----------------------
@@ -101,13 +122,13 @@ ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
 # -----------------------
 # Jenkins config
 # -----------------------
-COPY jenkins/init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
+COPY init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
 #COPY jenkins/init.jcasc/ /usr/share/jenkins/ref/init.jcasc/
-COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
+COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
 
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
-COPY jenkins/safeShutdown.sh ./
+COPY safeShutdown.sh ./
 
 # -----------------------
 # Metadata
