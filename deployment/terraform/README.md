@@ -19,7 +19,39 @@ This layout uses **one state per environment** under `deployment/terraform/envs/
 
 2. Edit `terraform.tfvars` and set `project_id` and `region`. **Do not commit** `terraform.tfvars` (it is gitignored).
 
-3. **Bootstrap state backend** (once per bucket): create the GCS bucket referenced in `backend.tf` and versioning on that bucket outside this module if required by policy.
+3. **Bootstrap state backend** (once per bucket):
+
+   - The bucket name in **`envs/*/backend.tf`** must exist and be **globally unique** across all of GCS (change the name in `backend.tf` if `terraform-state-bucket` is taken).
+   - Whoever runs **`terraform init`** needs object access on that bucket, including **`storage.objects.list`** (Terraform lists “workspaces” under your prefix). Grant **`roles/storage.objectAdmin`** on the bucket (narrower than project-wide Storage Admin).
+
+   Example (replace project, bucket, and member with yours; use your Google account or a CI service account):
+
+   ```bash
+   export PROJECT_ID="your-gcp-project-id"
+   export BUCKET="terraform-state-bucket"   # must match backend.tf
+
+   gcloud config set project "$PROJECT_ID"
+   gcloud storage buckets create "gs://${BUCKET}" --project="$PROJECT_ID" --location=US --uniform-bucket-level-access
+
+   gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
+     --member="user:chauhan.kamaldeep@gmail.com" \
+     --role="roles/storage.objectAdmin"
+   ```
+
+   If the bucket lives in **another** GCP project, create it there and add the same **`--member`** binding on that bucket in that project.
+
+   **If `add-iam-policy-binding` fails with `storage.buckets.getIamPolicy` denied:**
+
+   - Confirm **`echo "$BUCKET"`** is the **same** name you passed to **`buckets create`** (GCS names are global; if `terraform-state-bucket` was never created by you, you may be targeting a bucket in another project or a stale `export`).
+   - Verify the bucket is in your project: `gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT_ID"`.
+   - Changing bucket IAM requires **`storage.buckets.getIamPolicy` / `setIamPolicy`**. If org policy blocks that for your role, ask a **project Owner** to either run the **`add-iam-policy-binding`** command above **or** grant you **`roles/storage.admin`** on the project, then retry.
+   - **Workaround (project Owner only):** grant Terraform state access without editing that bucket’s IAM directly — attach **`roles/storage.objectAdmin`** at the **project** level (applies to objects in all buckets in that project; use a dedicated project or dedicated bucket if you need least privilege):
+
+     ```bash
+     gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+       --member="user:chauhan.kamaldeep@gmail.com" \
+       --role="roles/storage.objectAdmin"
+     ```
 
 4. Initialize and apply from the env directory:
 
