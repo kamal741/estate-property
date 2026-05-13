@@ -120,15 +120,15 @@ USER jenkins
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
 
 # -----------------------
-# Jenkins config
+# Jenkins config (paths are under jenkins/ — build context must be repo root, see cloudbuild.yaml)
 # -----------------------
-COPY init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
+COPY jenkins/init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
 #COPY jenkins/init.jcasc/ /usr/share/jenkins/ref/init.jcasc/
-COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
 
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
-COPY safeShutdown.sh ./
+COPY jenkins/safeShutdown.sh /var/jenkins_home/safeShutdown.sh
 
 # -----------------------
 # Metadata
