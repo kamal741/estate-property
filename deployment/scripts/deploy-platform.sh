@@ -61,7 +61,11 @@ fi
 
 DOCKER_BUILD_PUSH="$REPO_ROOT/k8s/scripts/docker-build-push-gcp-ar.sh"
 [[ -f "$DOCKER_BUILD_PUSH" ]] || die "missing k8s/scripts/docker-build-push-gcp-ar.sh"
-[[ -f "$TFVARS" ]] || die "missing $TFVARS — copy from terraform.tfvars.example and set project_id and region"
+[[ -f "$TFVARS" ]] || die "missing $TFVARS
+
+  Create it from the example (gitignored — never committed), then set real project_id and region:
+    cp \"$TF_DIR/terraform.tfvars.example\" \"$TFVARS\"
+    nano \"$TFVARS\"   # or use the Cloud Shell editor; replace your-gcp-project-id with your GCP project id"
 
 # Read first assignment of key = "value" or key = value from HCL-ish tfvars (no nested blocks).
 tfvar_get() {
