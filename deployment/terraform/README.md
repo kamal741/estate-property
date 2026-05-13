@@ -130,7 +130,7 @@ You can also use **`k8s/scripts/deploy.sh`** with **`SYNC_GKE_KUBECONFIG=1`** af
 ./k8s/scripts/jenkins-gke-env-from-terraform.sh dev              # human-readable; no jq
 ```
 
-Terraform creates the workload namespace `gke_namespace` (e.g. `dev-estateflow`, `prod-estateflow`) for app manifests; Helm charts that use their own namespace (e.g. Jenkins in `jenkins`) are configured separately under `k8s/env/<env>/`.
+Terraform creates the workload namespace `gke_namespace` (e.g. `dev-estateflow`, `prod-estateflow`) for app manifests and for the **Jenkins** Helm release (`k8s/scripts/deploy.sh` resolves it from Terraform output). **platform-ingress** Helm installs to `kube-system` with per-route Ingress namespaces under `k8s/env/<env>/`.
 
 ### Prod: private SQL and peering
 

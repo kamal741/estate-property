@@ -35,7 +35,7 @@ Monorepo for **EstateFlow** infrastructure and delivery: **GCP (Terraform)**, **
 
 1. **Terraform** provisions the **GKE** cluster, **namespace** for app workloads (`<env>-estateflow`), a regional **Artifact Registry** Docker repository (default id `estateflow-<env>`), Cloud SQL, Redis, bucket, secrets, etc.
 2. **Kubeconfig** is pointed at the cluster (`gcloud container clusters get-credentials …` — exposed as Terraform output `gke_get_credentials_command`).
-3. **Helm** installs **Jenkins** (often namespace `jenkins`) and **platform-ingress** (Helm release in `kube-system`, Ingress resources may target multiple namespaces).
+3. **Helm** installs **Jenkins** into Terraform **`gke_namespace`** (e.g. `dev-estateflow`) and **platform-ingress** (Helm release in `kube-system`, Ingress resources live in each route’s namespace).
 4. **Application services** are intended to be deployed **by Jenkins** after the controller is up, using cluster/namespace/auth derived from Terraform (see **Jenkins / CI** below).
 
 ---
@@ -71,7 +71,7 @@ Uses chart `k8s/services/charts/<service>` and values **`k8s/env/<env>/<service>
 ./k8s/scripts/deploy.sh prod platform-ingress
 ```
 
-Optional: explicit `helm` subcommand, extra Helm args, env vars **`RELEASE`**, **`NAMESPACE`** (otherwise Jenkins → namespace `jenkins`, platform-ingress → `kube-system`).
+Optional: explicit `helm` subcommand, extra Helm args, env vars **`RELEASE`**, **`NAMESPACE`** (overrides namespace for any chart), **`JENKINS_HELM_NAMESPACE`** (Jenkins only, if **`NAMESPACE`** unset). Default: Jenkins → **`terraform output -raw gke_namespace`** or **`<env>-estateflow`**; platform-ingress → **`kube-system`**.
 
 ### GKE kubeconfig from Terraform (same machine as Terraform state)
 
@@ -139,7 +139,7 @@ BUILD_PUSH_JENKINS_IMAGE=1 ./deployment/scripts/deploy-platform.sh dev
 
 **Auth in Jenkins** (not stored in this output): use a GCP **service account key** (or Workload Identity if Jenkins runs on GKE), `gcloud auth activate-service-account`, then run the **`gcloud_get_credentials_command`** value (or equivalent `gcloud container clusters get-credentials …`). Grant roles your policy allows (e.g. Kubernetes Engine developer / deployer).
 
-Use **`gke_app_namespace`** for Terraform-created app workloads; Jenkins controller remains in **`jenkins_helm_namespace`** unless you change Helm values.
+**`jenkins_gke_context`** now sets **`jenkins_helm_namespace`** to the same value as **`gke_app_namespace`** (Terraform **`gke_namespace`**). Override install target with **`NAMESPACE`** or **`JENKINS_HELM_NAMESPACE`** in **`k8s/scripts/deploy.sh`** if needed.
 
 ---
 

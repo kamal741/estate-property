@@ -14,7 +14,7 @@
 
 routes:
   - name: jenkins-ui
-    namespace: jenkins
+    namespace: prod-estateflow
     host: jenkins.prod.example.com
     serviceName: jenkins
     servicePort: 8080

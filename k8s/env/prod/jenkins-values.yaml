@@ -1,10 +1,11 @@
 # Prod overrides for the Jenkins chart (flat values schema).
-#
+# Namespace: Terraform **gke_namespace** (default **prod-estateflow**); see k8s/scripts/deploy.sh.
+# Migrating from namespace `jenkins`: `helm uninstall jenkins -n jenkins` first if a release name collision occurs.
 # Deploy (from repo root):
 #   ./k8s/scripts/deploy.sh prod jenkins
 #
 # Or manually:
-#   helm upgrade --install jenkins k8s/services/charts/jenkins -n jenkins --create-namespace \
+#   helm upgrade --install jenkins k8s/services/charts/jenkins -n prod-estateflow \
 #     -f k8s/env/prod/jenkins-values.yaml
 #
 # Pull from Google Artifact Registry: do not put project/region here. At deploy time, image.repository is set by:

@@ -85,7 +85,7 @@ output "jenkins_gke_context" {
     gke_cluster_name                  = module.infra.gke_cluster_name
     gke_cluster_location              = module.infra.gke_cluster_location
     gke_app_namespace                 = module.infra.gke_namespace
-    jenkins_helm_namespace            = "jenkins"
+    jenkins_helm_namespace            = module.infra.gke_namespace
     platform_ingress_helm_namespace   = "kube-system"
     gcloud_get_credentials_command    = module.infra.gke_get_credentials_command
     artifact_registry_repository_id   = module.infra.artifact_registry_repository_id

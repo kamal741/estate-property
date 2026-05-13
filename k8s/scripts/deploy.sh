@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Deploy to GKE: Helm charts (k8s/services/charts) or kubectl apply / Kustomize (k8s/env/<env>/manifests).
-# Run from repo root. Examples: ./k8s/scripts/deploy.sh dev jenkins | ./k8s/scripts/deploy.sh kubectl dev
+# Run from repo root. Examples:
+#   ./k8s/scripts/deploy.sh dev jenkins
+#   ./k8s/scripts/deploy.sh dev jenkins --set-string image.tag=v1.0.0
+#   JENKINS_IMAGE_TAG=v1.0.0 ./k8s/scripts/deploy.sh dev jenkins
 # GKE: SYNC_GKE_KUBECONFIG=1 runs terraform output gke_get_credentials_command in deployment/terraform/envs/<env>/
-# Helm env vars: RELEASE, NAMESPACE.  ./k8s/scripts/deploy.sh --help
+# Helm env vars: RELEASE, NAMESPACE, JENKINS_HELM_NAMESPACE, JENKINS_IMAGE_TAG, JENKINS_IMAGE_REPOSITORY, … ./k8s/scripts/deploy.sh --help
 
 set -euo pipefail
 
@@ -19,7 +22,8 @@ show_usage() {
     deploy.sh helm <env> <service> [helm args...]
     deploy.sh kubectl <env> [path-from-repo-root] [kubectl apply args...]
 
-  Helm: chart k8s/services/charts/<service>, values k8s/env/<env>/<service>-values.yaml
+  Helm: chart k8s/services/charts/<service>, values k8s/env/<env>/<service>-values.yaml.
+    Anything after <service> is passed through to `helm upgrade` (e.g. --set-string image.tag=v1.0.0 for Jenkins).
   kubectl: default path k8s/env/<env>/manifests (kustomization.yaml → apply -k, else apply -f)
   GKE: SYNC_GKE_KUBECONFIG=1 → terraform gke_get_credentials_command from deployment/terraform/envs/<env>/
 
@@ -28,9 +32,32 @@ show_usage() {
     GCP_PROJECT_ID + GCP_REGION + ARTIFACT_REGISTRY_REPOSITORY  (same path is built; optional JENKINS_AR_IMAGE_NAME, default jenkins)
     Else if SKIP_JENKINS_IMAGE_REPOSITORY_AUTO is unset: terraform output jenkins_image_repository from deployment/terraform/envs/<env>
     SKIP_JENKINS_IMAGE_REPOSITORY_AUTO=1  → do not inject; use values + chart defaults only
-  Jenkins image.tag: set JENKINS_IMAGE_TAG (e.g. v1.0.0) to override k8s/env/<env>/jenkins-values.yaml image.tag.
-  Extra helm args after ours override --set-string (e.g. ... jenkins --set-string image.tag=foo).
+  Jenkins image.tag: use env JENKINS_IMAGE_TAG=v1.0.0, or pass Helm args after the service name, e.g.
+    ./k8s/scripts/deploy.sh dev jenkins --set-string image.tag=v1.0.0
+    Trailing args are applied after this script’s --set-string flags, so they win for the same key.
+  Jenkins Helm namespace: defaults to Terraform output gke_namespace (e.g. dev-estateflow), else <env>-estateflow.
+    Override with NAMESPACE=... or JENKINS_HELM_NAMESPACE=... (NAMESPACE wins).
+  Extra helm args: any other `helm upgrade` flags (e.g. --set key=val, --dry-run).
 EOF
+}
+
+# Same namespace Terraform uses for app workloads (kubernetes_namespace_v1.app).
+jenkins_helm_target_namespace() {
+  local env="$1"
+  if [[ -n "${JENKINS_HELM_NAMESPACE:-}" ]]; then
+    printf '%s' "${JENKINS_HELM_NAMESPACE}"
+    return 0
+  fi
+  local tfdir="$REPO_ROOT/deployment/terraform/envs/$env"
+  if [[ -d "$tfdir" ]] && command -v terraform >/dev/null 2>&1; then
+    local out
+    out="$(cd "$tfdir" && terraform output -raw gke_namespace 2>/dev/null)" || true
+    if [[ -n "$out" ]]; then
+      printf '%s' "$out"
+      return 0
+    fi
+  fi
+  printf '%s-estateflow' "$env"
 }
 
 # Resolves Helm image.repository for Jenkins (no tag). Empty = do not pass --set-string.
@@ -82,9 +109,10 @@ sync_kubeconfig_if_requested() {
 
 helm_namespace() {
   local service="$1"
+  local env="$2"
   [[ -n "${NAMESPACE:-}" ]] && { echo "$NAMESPACE"; return; }
   case "$service" in
-    jenkins) echo jenkins ;;
+    jenkins) jenkins_helm_target_namespace "$env" ;;
     platform-ingress) echo kube-system ;;
     *) echo "$service" ;;
   esac
@@ -105,7 +133,7 @@ helm_upgrade() {
 
   local release="${RELEASE:-$service}"
   local ns
-  ns="$(helm_namespace "$service")"
+  ns="$(helm_namespace "$service" "$env")"
 
   local jenkins_image_overrides=()
   if [[ "$service" == "jenkins" ]]; then

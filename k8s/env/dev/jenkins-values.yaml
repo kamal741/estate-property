@@ -1,10 +1,14 @@
 # Dev overrides for the Jenkins chart (flat values schema).
 #
+# Namespace: `k8s/scripts/deploy.sh` installs Jenkins into Terraform **gke_namespace** (default **dev-estateflow**),
+# same as app workloads. Override with **NAMESPACE** or **JENKINS_HELM_NAMESPACE** if needed.
+# Migrating from an older `jenkins` namespace: `helm uninstall jenkins -n jenkins` (and remove the PVC if you accept data loss), then deploy again.
+#
 # Deploy (from repo root):
 #   ./k8s/scripts/deploy.sh dev jenkins
 #
 # Or manually:
-#   helm upgrade --install jenkins k8s/services/charts/jenkins -n jenkins --create-namespace \
+#   helm upgrade --install jenkins k8s/services/charts/jenkins -n dev-estateflow \
 #     -f k8s/env/dev/jenkins-values.yaml
 #
 # Pull from Google Artifact Registry: do not put project/region here. At deploy time, image.repository is set by:

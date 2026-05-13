@@ -1,5 +1,13 @@
 # Dev routes for platform-ingress.
 #
+# No custom domain yet: after `helm upgrade`, get the HTTP(S) front IP:
+#   kubectl get ingress -n dev-estateflow
+# Use a free DNS name that resolves to that IP, e.g. nip.io — if the ADDRESS is 34.8.92.201, set
+#   host: jenkins.34.8.92.201.nip.io
+# (subdomain left of the IP is arbitrary), redeploy this chart, then open that URL in a browser.
+# Alternatively add a line to /etc/hosts: `<ADDRESS> jenkins.dev.local` and set host to `jenkins.dev.local`.
+# Jenkins “Jenkins URL” should match the host you use, or redirects may break (configure in UI or init Groovy).
+#
 # Deploy (from repo root):
 #   ./k8s/scripts/deploy.sh dev platform-ingress
 #
@@ -14,7 +22,9 @@
 
 routes:
   - name: jenkins-ui
+    # Same namespace as Jenkins Helm release (Terraform app ns: dev-estateflow).
     namespace: dev-estateflow
+    # Replace with your real domain, nip.io (see header), or /etc/hosts name once you know the ingress IP.
     host: jenkins.dev.estateflow.com
     serviceName: jenkins
     servicePort: 8080
