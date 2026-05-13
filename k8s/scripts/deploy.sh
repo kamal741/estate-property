@@ -22,7 +22,39 @@ show_usage() {
   Helm: chart k8s/services/charts/<service>, values k8s/env/<env>/<service>-values.yaml
   kubectl: default path k8s/env/<env>/manifests (kustomization.yaml → apply -k, else apply -f)
   GKE: SYNC_GKE_KUBECONFIG=1 → terraform gke_get_credentials_command from deployment/terraform/envs/<env>/
+
+  Jenkins image.repository (no per-file project id required), highest precedence first:
+    JENKINS_IMAGE_REPOSITORY=REGION-docker.pkg.dev/PROJECT/REPO/jenkins  (full path, no tag)
+    GCP_PROJECT_ID + GCP_REGION + ARTIFACT_REGISTRY_REPOSITORY  (same path is built; optional JENKINS_AR_IMAGE_NAME, default jenkins)
+    Else if SKIP_JENKINS_IMAGE_REPOSITORY_AUTO is unset: terraform output jenkins_image_repository from deployment/terraform/envs/<env>
+    SKIP_JENKINS_IMAGE_REPOSITORY_AUTO=1  → do not inject; use values + chart defaults only
+  Extra helm args after ours override --set-string (e.g. ... jenkins --set-string image.tag=foo).
 EOF
+}
+
+# Resolves Helm image.repository for Jenkins (no tag). Empty = do not pass --set-string.
+jenkins_resolve_image_repository() {
+  local env="$1"
+  if [[ -n "${JENKINS_IMAGE_REPOSITORY:-}" ]]; then
+    printf '%s' "$JENKINS_IMAGE_REPOSITORY"
+    return 0
+  fi
+  if [[ "${SKIP_JENKINS_IMAGE_REPOSITORY_AUTO:-}" == "1" ]]; then
+    return 0
+  fi
+  if [[ -n "${GCP_PROJECT_ID:-}" && -n "${GCP_REGION:-}" && -n "${ARTIFACT_REGISTRY_REPOSITORY:-}" ]]; then
+    local img="${JENKINS_AR_IMAGE_NAME:-jenkins}"
+    printf '%s' "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/${img}"
+    return 0
+  fi
+  local tfdir="$REPO_ROOT/deployment/terraform/envs/$env"
+  if [[ -d "$tfdir" ]] && command -v terraform >/dev/null 2>&1; then
+    local out
+    out="$(cd "$tfdir" && terraform output -raw jenkins_image_repository 2>/dev/null)" || true
+    if [[ -n "$out" ]]; then
+      printf '%s' "$out"
+    fi
+  fi
 }
 
 sync_kubeconfig_if_requested() {
@@ -74,6 +106,16 @@ helm_upgrade() {
   local ns
   ns="$(helm_namespace "$service")"
 
+  local repo_override=()
+  if [[ "$service" == "jenkins" ]]; then
+    local resolved
+    resolved="$(jenkins_resolve_image_repository "$env")"
+    if [[ -n "$resolved" ]]; then
+      repo_override=(--set-string "image.repository=$resolved")
+      echo "    (Jenkins image.repository from env/terraform: $resolved)"
+    fi
+  fi
+
   echo "==> helm upgrade --install release=$release namespace=$ns (env=$env service=$service)"
   echo "    $chart"
   echo "    -f $values"
@@ -82,6 +124,7 @@ helm_upgrade() {
     --namespace "$ns" \
     --create-namespace \
     --values "$values" \
+    "${repo_override[@]}" \
     "$@"
 }
 

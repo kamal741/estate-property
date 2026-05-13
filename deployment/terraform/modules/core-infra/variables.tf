@@ -125,3 +125,13 @@ variable "gke_namespace" {
   description = "Kubernetes namespace name. Defaults to <env>-estateflow when null."
   default     = null
 }
+
+# ---------------------------------------------------------------------------
+# Artifact Registry (Docker)
+# ---------------------------------------------------------------------------
+variable "artifact_registry_repository_id" {
+  type        = string
+  description = "Artifact Registry Docker repository id. Leave unset to use estateflow-<env> so dev and prod can share one GCP project without a repository id clash."
+  default     = null
+  nullable    = true
+}

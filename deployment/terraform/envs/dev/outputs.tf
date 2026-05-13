@@ -68,6 +68,16 @@ output "gcp_project_id" {
 }
 
 # For Jenkins / CI: cluster, namespaces, and the exact gcloud command to refresh kubeconfig.
+output "artifact_registry_repository_id" {
+  description = "Artifact Registry repository id (set ARTIFACT_REGISTRY_REPOSITORY when using BUILD_PUSH_JENKINS_IMAGE=1)."
+  value       = module.infra.artifact_registry_repository_id
+}
+
+output "jenkins_image_repository" {
+  description = "Helm Jenkins image.repository (no tag) for images pushed to this env’s AR repo."
+  value       = module.infra.jenkins_image_repository
+}
+
 output "jenkins_gke_context" {
   description = "Non-secret GKE context for pipelines (use with a GCP SA key or gcloud auth in the agent)."
   value = {
@@ -78,5 +88,7 @@ output "jenkins_gke_context" {
     jenkins_helm_namespace            = "jenkins"
     platform_ingress_helm_namespace   = "kube-system"
     gcloud_get_credentials_command    = module.infra.gke_get_credentials_command
+    artifact_registry_repository_id   = module.infra.artifact_registry_repository_id
+    jenkins_image_repository          = module.infra.jenkins_image_repository
   }
 }

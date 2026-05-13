@@ -93,3 +93,18 @@ output "gke_get_credentials_command" {
   description = "Convenience command to fetch kubeconfig credentials for this cluster."
   value       = "gcloud container clusters get-credentials ${google_container_cluster.primary.name} --zone ${google_container_cluster.primary.location} --project ${var.project_id}"
 }
+
+output "artifact_registry_repository_id" {
+  description = "Artifact Registry Docker repository id (use as ARTIFACT_REGISTRY_REPOSITORY with deploy-platform.sh BUILD_PUSH_JENKINS_IMAGE=1)."
+  value       = google_artifact_registry_repository.docker.repository_id
+}
+
+output "artifact_registry_region" {
+  description = "Region where the Artifact Registry repository lives (same as var.region)."
+  value       = google_artifact_registry_repository.docker.location
+}
+
+output "jenkins_image_repository" {
+  description = "Helm image.repository value for the custom Jenkins image (no tag): REGION-docker.pkg.dev/PROJECT/REPO/jenkins."
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker.repository_id}/jenkins"
+}

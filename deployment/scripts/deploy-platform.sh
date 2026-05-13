@@ -17,8 +17,12 @@
 #   SKIP_GCLOUD_BOOTSTRAP=1   Skip gcloud API enable + state bucket create (use when bucket already exists).
 #   TERRAFORM_STATE_BUCKET    State bucket name (default: estateflow-bucket-<env> — must be globally unique in GCS).
 #   GCS_STATE_BUCKET_LOCATION Location for new bucket (default: region from terraform.tfvars, else us-central1).
-#   TERRAFORM_APPLY_EXTRA     Extra args for terraform apply (e.g. -target=...)
-#   TERRAFORM_INIT_EXTRA      Extra args for terraform init (e.g. -migrate-state)
+#   BUILD_PUSH_JENKINS_IMAGE=1  After kube sync, build and push Jenkins to Artifact Registry before Helm (needs Docker).
+#   ARTIFACT_REGISTRY_REPOSITORY  Required when BUILD_PUSH_JENKINS_IMAGE=1 (e.g. estateflow-dev). When set (with full
+#                             deploy path), also exports JENKINS_IMAGE_REPOSITORY for Helm so jenkins-values need no project id.
+#   JENKINS_IMAGE_TAG          Optional; defaults to <env> (dev or prod) to match k8s/env/<env>/jenkins-values.yaml tags.
+#   JENKINS_IMAGE_REPOSITORY   Optional full image path without tag; if unset, deploy.sh may fill from Terraform output.
+#   SKIP_JENKINS_IMAGE_REPOSITORY_AUTO=1  Do not auto-set JENKINS_IMAGE_REPOSITORY from ARTIFACT_REGISTRY_REPOSITORY / TF.
 
 set -euo pipefail
 
@@ -55,6 +59,8 @@ if [[ "${HELM_ONLY:-}" == "1" ]]; then
   exit 0
 fi
 
+DOCKER_BUILD_PUSH="$REPO_ROOT/k8s/scripts/docker-build-push-gcp-ar.sh"
+[[ -f "$DOCKER_BUILD_PUSH" ]] || die "missing k8s/scripts/docker-build-push-gcp-ar.sh"
 [[ -f "$TFVARS" ]] || die "missing $TFVARS — copy from terraform.tfvars.example and set project_id and region"
 
 # Read first assignment of key = "value" or key = value from HCL-ish tfvars (no nested blocks).
@@ -85,7 +91,7 @@ gcloud_bootstrap() {
   gcloud config set project "$PROJECT_ID" >/dev/null
 
   echo "==> gcloud services enable (idempotent)"
-  gcloud services enable cloudresourcemanager.googleapis.com serviceusage.googleapis.com --project="$PROJECT_ID"
+  gcloud services enable cloudresourcemanager.googleapis.com serviceusage.googleapis.com artifactregistry.googleapis.com --project="$PROJECT_ID"
 
   if gcloud storage buckets describe "gs://${STATE_BUCKET}" --project="$PROJECT_ID" &>/dev/null; then
     echo "==> GCS state bucket already exists: gs://${STATE_BUCKET}"
@@ -143,6 +149,28 @@ if [[ "${SKIP_KUBECONFIG_SYNC:-}" != "1" ]]; then
   sync_kube
 else
   echo "==> SKIP_KUBECONFIG_SYNC=1 — skipping kubeconfig refresh"
+fi
+
+build_push_jenkins_if_requested() {
+  [[ "${BUILD_PUSH_JENKINS_IMAGE:-}" == "1" ]] || return 0
+  [[ -n "${ARTIFACT_REGISTRY_REPOSITORY:-}" ]] ||
+    die "ARTIFACT_REGISTRY_REPOSITORY is required when BUILD_PUSH_JENKINS_IMAGE=1 (Artifact Registry repository id, e.g. estateflow)"
+  local jtag="${JENKINS_IMAGE_TAG:-$ENV}"
+  echo "==> BUILD_PUSH_JENKINS_IMAGE=1 — build and push Jenkins (${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/jenkins:${jtag})"
+  bash "$DOCKER_BUILD_PUSH" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --repository "$ARTIFACT_REGISTRY_REPOSITORY" \
+    --image jenkins \
+    --tag "$jtag" \
+    --dockerfile jenkins/Dockerfile
+}
+
+build_push_jenkins_if_requested
+
+if [[ "${SKIP_JENKINS_IMAGE_REPOSITORY_AUTO:-}" != "1" && -z "${JENKINS_IMAGE_REPOSITORY:-}" && -n "${ARTIFACT_REGISTRY_REPOSITORY:-}" ]]; then
+  export JENKINS_IMAGE_REPOSITORY="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/jenkins"
+  echo "==> JENKINS_IMAGE_REPOSITORY=$JENKINS_IMAGE_REPOSITORY (from project/region + ARTIFACT_REGISTRY_REPOSITORY)"
 fi
 
 echo "==> Helm: Jenkins then platform-ingress"

@@ -8,7 +8,7 @@ locals {
     var.extra_labels
   )
 
-project_services = toset([
+  project_services = toset([
   # 🔥 Core (MUST HAVE)
   "cloudresourcemanager.googleapis.com",
   "serviceusage.googleapis.com",
@@ -28,13 +28,23 @@ project_services = toset([
   # 📦 Storage & Secrets
   "storage.googleapis.com",
   "secretmanager.googleapis.com",
-])
+
+  # 🐳 Artifact Registry (Docker images for GKE / Jenkins)
+  "artifactregistry.googleapis.com",
+  ])
 
   gke_cluster_name = "${var.env}-estateflow-cluster"
   gke_namespace    = coalesce(var.gke_namespace, "${var.env}-estateflow")
   gke_zone         = coalesce(var.gke_zone, "${var.region}-a")
 
   redis_transit_encryption = var.redis_tier == "BASIC" ? "DISABLED" : "SERVER_AUTHENTICATION"
+
+  # Resolved repository id (explicit var or estateflow-<env> when dev/prod share one project).
+  artifact_registry_repository_id = coalesce(var.artifact_registry_repository_id, "estateflow-${var.env}")
+}
+
+data "google_project" "current" {
+  project_id = var.project_id
 }
 
 # -----------------------------------------------------------------------------
@@ -315,4 +325,27 @@ resource "google_secret_manager_secret_version" "redis_auth_version" {
   secret_data = google_redis_instance.redis.auth_string
 
   deletion_policy = "ABANDON"
+}
+
+# -----------------------------------------------------------------------------
+# Artifact Registry (Docker) — Jenkins and other images
+# -----------------------------------------------------------------------------
+resource "google_artifact_registry_repository" "docker" {
+  location      = var.region
+  repository_id = local.artifact_registry_repository_id
+  description   = "Docker images for estateflow (${var.env})"
+  format        = "DOCKER"
+
+  labels = local.common_labels
+
+  depends_on = [google_project_service.services["artifactregistry.googleapis.com"]]
+}
+
+# GKE nodes use the default Compute Engine service account unless node_config.service_account is set.
+resource "google_artifact_registry_repository_iam_member" "gke_nodes_reader" {
+  project    = var.project_id
+  location   = google_artifact_registry_repository.docker.location
+  repository = google_artifact_registry_repository.docker.name
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
 }

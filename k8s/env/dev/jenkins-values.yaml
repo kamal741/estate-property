@@ -7,11 +7,12 @@
 #   helm upgrade --install jenkins k8s/services/charts/jenkins -n jenkins --create-namespace \
 #     -f k8s/env/dev/jenkins-values.yaml
 #
-# Build image (example):
-#   docker build -f jenkins/Dockerfile -t <registry>/estate-property/jenkins:dev .
+# Pull from Google Artifact Registry: do not put project/region here. At deploy time, image.repository is set by:
+#   ./k8s/scripts/deploy.sh (see --help): JENKINS_IMAGE_REPOSITORY, or GCP_PROJECT_ID+GCP_REGION+ARTIFACT_REGISTRY_REPOSITORY,
+#   or terraform output jenkins_image_repository. deploy-platform.sh exports JENKINS_IMAGE_REPOSITORY when
+#   ARTIFACT_REGISTRY_REPOSITORY is set (with project/region from terraform.tfvars).
 
 image:
-  repository: estate-property/jenkins
   tag: dev
   pullPolicy: IfNotPresent
 

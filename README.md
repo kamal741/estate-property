@@ -8,12 +8,13 @@ Monorepo for **EstateFlow** infrastructure and delivery: **GCP (Terraform)**, **
 
 | Path | Purpose |
 |------|--------|
-| `deployment/terraform/` | GCP infra: GKE, Cloud SQL, Redis, GCS, Secret Manager, optional VPC. One state per env under `envs/dev` and `envs/prod`. See **`deployment/terraform/README.md`** for variables, backends, and security notes. |
-| `deployment/scripts/deploy-platform.sh` | Optional one-shot: **Terraform apply** → **kubeconfig** → **Helm** (Jenkins + platform-ingress only). |
+| `deployment/terraform/` | GCP infra: GKE, **Artifact Registry** (Docker), Cloud SQL, Redis, GCS, Secret Manager, optional VPC. One state per env under `envs/dev` and `envs/prod`. See **`deployment/terraform/README.md`** for variables, backends, and security notes. |
+| `deployment/scripts/deploy-platform.sh` | Optional one-shot: **Terraform** → **kubeconfig** → optional **Docker build/push Jenkins to Artifact Registry** → **Helm** (Jenkins + platform-ingress). See §3 for env vars. |
 | `k8s/services/charts/jenkins/` | Helm chart for the Jenkins controller (Deployment, Service, PVC, probes). |
 | `k8s/services/charts/platform-ingress/` | Helm chart that renders **Ingress** objects from a shared `routes` list. |
 | `k8s/env/<env>/` | Per-environment **Helm values** (`jenkins-values.yaml`, `platform-ingress-values.yaml`) and optional **`manifests/`** for raw **Kustomize** / `kubectl apply`. |
 | `k8s/scripts/deploy.sh` | Deploy any chart with env values, or `kubectl apply` / `-k`; optional **GKE kubeconfig** sync from Terraform outputs. |
+| `k8s/scripts/docker-build-push-gcp-ar.sh` | Build any Dockerfile from the repo and **push to Google Artifact Registry** (`REGION-docker.pkg.dev/...`). Used standalone or from **`deploy-platform.sh`** when **`BUILD_PUSH_JENKINS_IMAGE=1`**. |
 | `k8s/scripts/jenkins-gke-env-from-terraform.sh` | Prints **Terraform `jenkins_gke_context`** (cluster, namespaces, `gcloud get-credentials` command) for **Jenkins pipelines**—does not deploy workloads. |
 | `jenkins/` | **Dockerfile** and controller config: `plugins.txt`, `init.groovy.d/`, `safeShutdown.sh`. **Build context must be the repo root** (the trailing `.` in the command): `docker build -f jenkins/Dockerfile -t <registry>/estate-property/jenkins:<tag> .` so `COPY jenkins/...` in the Dockerfile resolves. |
 | `jenkins-jobs/` | Job DSL Groovy consumed by the seed job (e.g. `Jenkins_Seed_DSL.groovy`, pipeline job definitions). |
@@ -23,14 +24,14 @@ Monorepo for **EstateFlow** infrastructure and delivery: **GCP (Terraform)**, **
 ## Prerequisites
 
 - **GCP**: project, billing, APIs enabled (Terraform enables required services on apply).
-- **Tools**: `terraform` (≥ 1.5), `gcloud`, `kubectl`, `helm`; for scripted env exports from Terraform, **`jq`** (`jenkins-gke-env-from-terraform.sh --export` / `--json`).
+- **Tools**: `terraform` (≥ 1.5), `gcloud`, `kubectl`, `helm`; for scripted env exports from Terraform, **`jq`** (`jenkins-gke-env-from-terraform.sh --export` / `--json`). To **build/push** images to Artifact Registry from this repo, **`docker`** is required (`k8s/scripts/docker-build-push-gcp-ar.sh` or **`BUILD_PUSH_JENKINS_IMAGE=1`** in **`deploy-platform.sh`**).
 - **Auth**: credentials that can run `terraform apply` and `gcloud container clusters get-credentials` (human or CI service account).
 
 ---
 
 ## Deployment flow (high level)
 
-1. **Terraform** provisions the **GKE** cluster, **namespace** for app workloads (`<env>-estateflow`), Cloud SQL, Redis, bucket, secrets, etc.
+1. **Terraform** provisions the **GKE** cluster, **namespace** for app workloads (`<env>-estateflow`), a regional **Artifact Registry** Docker repository (default id `estateflow-<env>`), Cloud SQL, Redis, bucket, secrets, etc.
 2. **Kubeconfig** is pointed at the cluster (`gcloud container clusters get-credentials …` — exposed as Terraform output `gke_get_credentials_command`).
 3. **Helm** installs **Jenkins** (often namespace `jenkins`) and **platform-ingress** (Helm release in `kube-system`, Ingress resources may target multiple namespaces).
 4. **Application services** are intended to be deployed **by Jenkins** after the controller is up, using cluster/namespace/auth derived from Terraform (see **Jenkins / CI** below).
@@ -106,8 +107,16 @@ HELM_ONLY=1 ./deployment/scripts/deploy-platform.sh dev   # only Helm; kubeconte
 - **`TERRAFORM_STATE_BUCKET`** / **`GCS_STATE_BUCKET_LOCATION`**: override default state bucket name and GCS location (or pass as 2nd and 3rd CLI args).
 - **`TERRAFORM_APPLY_EXTRA`**: extra arguments to `terraform apply` (e.g. targeted apply).
 - **`TERRAFORM_INIT_EXTRA`**: e.g. **`-reconfigure`** after changing backend settings.
+- **`BUILD_PUSH_JENKINS_IMAGE=1`**: after kubeconfig sync, run **`k8s/scripts/docker-build-push-gcp-ar.sh`** for Jenkins before Helm (requires **Docker** on the machine). Set **`ARTIFACT_REGISTRY_REPOSITORY`** to the Terraform-managed repository id (after apply: **`terraform output -raw artifact_registry_repository_id`** in `deployment/terraform/envs/<env>` — default is **`estateflow-dev`** / **`estateflow-prod`**). Optional **`JENKINS_IMAGE_TAG`** (defaults to **`dev`** / **`prod`** from the first argument). Not used with **`HELM_ONLY=1`**. When **`ARTIFACT_REGISTRY_REPOSITORY`** is set, **`deploy-platform.sh`** exports **`JENKINS_IMAGE_REPOSITORY`** for Helm so **`k8s/env/<env>/jenkins-values.yaml`** does not need **`image.repository`** (only **`image.tag`** should match the pushed tag).
 
 Helm is invoked via **`k8s/scripts/deploy.sh`** (not `jenkins-gke-env-from-terraform.sh`, which only prints CI context).
+
+Example (Terraform + push Jenkins to AR + Helm):
+
+```bash
+export ARTIFACT_REGISTRY_REPOSITORY="$(cd deployment/terraform/envs/dev && terraform output -raw artifact_registry_repository_id)"
+BUILD_PUSH_JENKINS_IMAGE=1 ./deployment/scripts/deploy-platform.sh dev
+```
 
 ---
 
@@ -135,6 +144,22 @@ Use **`gke_app_namespace`** for Terraform-created app workloads; Jenkins control
 - Job DSL sources: **`jenkins-jobs/`**; seed job loads external DSL paths as configured in your seed Groovy.
 
 After the controller is running, use Jenkins to run seed jobs and application pipelines.
+
+### Build and push images (Artifact Registry)
+
+Use **`k8s/scripts/docker-build-push-gcp-ar.sh`** for any service image (Jenkins or others). Terraform creates a **Docker** repository per environment (override id with module input **`artifact_registry_repository_id`** if needed).
+
+```bash
+./k8s/scripts/docker-build-push-gcp-ar.sh \
+  --project YOUR_GCP_PROJECT \
+  --region us-central1 \
+  --repository "$(terraform output -raw artifact_registry_repository_id)" \
+  --image jenkins \
+  --tag dev \
+  --dockerfile jenkins/Dockerfile
+```
+
+(Run **`terraform output …`** from **`deployment/terraform/envs/<env>`** after apply.) **`k8s/scripts/deploy.sh`** sets **`image.repository`** on the Helm command when **`JENKINS_IMAGE_REPOSITORY`** is set, or when **`GCP_PROJECT_ID`**, **`GCP_REGION`**, and **`ARTIFACT_REGISTRY_REPOSITORY`** are all set, or (by default) from **`terraform output -raw jenkins_image_repository`** — see **`./k8s/scripts/deploy.sh --help`**. Keep **`image.tag`** in values aligned with **`--tag`**. GKE nodes get **`roles/artifactregistry.reader`** on that repository via Terraform; see **`imagePullSecrets`** in values only if you use a different pull identity.
 
 ### Job DSL: `script not yet approved for use`
 
@@ -169,6 +194,8 @@ You also have **`permissive-script-security`** in `plugins.txt`; if your admins 
 | Goal | Command / flow |
 |------|----------------|
 | First full stack (infra + Jenkins + ingress) | `terraform apply` in `deployment/terraform/envs/<env>` **or** `./deployment/scripts/deploy-platform.sh <env>` |
+| Full stack + build/push Jenkins image to AR then Helm | `ARTIFACT_REGISTRY_REPOSITORY=... BUILD_PUSH_JENKINS_IMAGE=1 ./deployment/scripts/deploy-platform.sh <env>` (needs Docker; align `jenkins-values.yaml` with the registry URL) |
+| Build/push Jenkins only (no deploy-platform) | `./k8s/scripts/docker-build-push-gcp-ar.sh --project ... --region ... --repository ... --image jenkins --tag dev --dockerfile jenkins/Dockerfile` |
 | Update only Jenkins Helm release | `./k8s/scripts/deploy.sh <env> jenkins` (use `SYNC_GKE_KUBECONFIG=1` if kubeconfig is stale) |
 | Update only ingress routes | `./k8s/scripts/deploy.sh <env> platform-ingress` |
 | Apply raw Kustomize for an env | `./k8s/scripts/deploy.sh kubectl <env>` |

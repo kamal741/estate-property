@@ -7,7 +7,7 @@ This layout uses **one state per environment** under `deployment/terraform/envs/
 - Terraform `>= 1.5`
 - A GCP project with billing enabled
 - A **GCS bucket** for remote state — the bucket name is **not** hard-coded in `backend.tf`; **`deployment/scripts/deploy-platform.sh`** can create it and passes it to **`terraform init -backend-config=bucket=...`**. You can also create the bucket yourself and set **`TERRAFORM_STATE_BUCKET`** / **`SKIP_GCLOUD_BOOTSTRAP=1`**.
-- IAM for whoever runs Terraform: ability to enable APIs, create Cloud SQL, Redis, buckets, secrets, and (for prod) VPC + private service access
+- IAM for whoever runs Terraform: ability to enable APIs, create Cloud SQL, Redis, buckets, secrets, Artifact Registry, and (for prod) VPC + private service access
 
 ## First-time setup
 
@@ -76,6 +76,16 @@ If **`add-iam-policy-binding`** fails with **`storage.buckets.getIamPolicy`** de
 | GKE node pool | `e2-standard-2` × 1 | `e2-standard-4` × 3 |
 | GKE deletion protection | off | on |
 | Application namespace | `dev-estateflow` | `prod-estateflow` |
+| Artifact Registry (Docker) repo id (default) | `estateflow-dev` | `estateflow-prod` |
+
+Override the repository id for an env by passing **`artifact_registry_repository_id`** into **`module "infra"`** in that env’s **`main.tf`** (for example a single shared repo **`estateflow`** when dev and prod use different GCP projects).
+
+## Artifact Registry (Docker images)
+
+Terraform enables **`artifactregistry.googleapis.com`** and creates one **regional** Docker repository per environment in **`var.region`**, with id **`estateflow-<env>`** by default (`estateflow-dev`, `estateflow-prod`) so two roots can share one GCP project without a name clash.
+
+- **Pull access for GKE**: the default Compute Engine node service account (**`PROJECT_NUMBER-compute@developer.gserviceaccount.com`**) receives **`roles/artifactregistry.reader`** on that repository. If you later set a **custom** node service account on the pool, add the same role for that account (outside this module or extend the module).
+- **Outputs** (after `terraform apply`): **`artifact_registry_repository_id`**, **`jenkins_image_repository`** (Helm `image.repository` without tag). **`jenkins_gke_context`** includes both for **`jenkins-gke-env-from-terraform.sh`**.
 
 ## GKE cluster + namespace
 
@@ -114,7 +124,12 @@ SYNC_GKE_KUBECONFIG=1 ./k8s/scripts/deploy.sh dev jenkins
 SKIP_TERRAFORM=1 ./deployment/scripts/deploy-platform.sh prod
 # Helm only — no Terraform, no kube sync (kubectl must already target the cluster):
 HELM_ONLY=1 ./deployment/scripts/deploy-platform.sh dev
+# Build/push Jenkins to Artifact Registry then Helm (requires Docker; repo id from Terraform):
+REPO="$(cd deployment/terraform/envs/dev && terraform output -raw artifact_registry_repository_id)"
+ARTIFACT_REGISTRY_REPOSITORY="$REPO" BUILD_PUSH_JENKINS_IMAGE=1 ./deployment/scripts/deploy-platform.sh dev
 ```
+
+To push images without **`deploy-platform.sh`**, use **`k8s/scripts/docker-build-push-gcp-ar.sh`** from the repo root (see root **`README.md`** §5).
 
 **Jenkins pipelines** (cluster name, namespaces, `gcloud get-credentials` string from state):
 
