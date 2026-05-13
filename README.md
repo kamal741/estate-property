@@ -131,11 +131,13 @@ After the controller is running, use Jenkins to run seed jobs and application pi
 
 ### Job DSL: `script not yet approved for use`
 
-Jenkins only runs **`init.groovy.d/*.groovy`** (name must **end with `.groovy`**). Files named **`*.groovy.override` are ignored**, so script-approval init never ran.
+Jenkins only runs **`init.groovy.d/*.groovy`** (name must **end with `.groovy`**). Files named **`*.groovy.override` are ignored** by Jenkins.
 
 This repo ships:
 
-- **`97-setCSRFAndScriptSecurity.groovy`** — runs your existing `preapproveAll()` + CSRF settings (same as the old `.override` file).
+- **`00-disableInstallWizard.groovy`** — runs first (before **`97-...`**): sets **`InstallState.INITIAL_SETUP_COMPLETED`** and **`save()`**. Use together with **`-Djenkins.install.runSetupWizard=false`** on the JVM (see image **`ENV JAVA_OPTS`**, Helm **`javaOpts`** / **`jenkinsOpts`**).
+- **`97-setCSRFAndScriptSecurity.groovy`** — runs your existing **`preapproveAll()`** + CSRF-related settings.
+- **`seedJobs.groovy`** — creates **`Jenkins-Seed_DSL`** with **`GIT_BRANCH`** and **`EMAIL_RECIPIENTS`** parameters and starts the first build via **`scheduleBuild2`** with defaults (`main` / empty). If an old seed job exists without parameters, delete the job or wipe the controller PVC once so init can recreate it.
 - **`zzz-approvePendingJobDslScripts.groovy`** — periodically runs **`ScriptApproval.preapproveAll()`** plus **`save()`** (there is no `approvePendingScripts()` API). That clears pending whole-script entries after Job DSL runs, including when the first seed happens long after boot. Rebuild the controller image and restart the pod after changing this file.
 
 **If the seed still fails once:** wait up to about two minutes after the failure (next bootstrap pass) and **run the seed again**, or use **Manage Jenkins → In-process Script Approval** once.

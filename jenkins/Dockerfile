@@ -120,6 +120,10 @@ RUN apt-get autoremove -y && \
 # -----------------------
 USER jenkins
 
+# When the container does not override JAVA_OPTS, still skip the GUI setup wizard on first boot.
+# Helm should pass full javaOpts (including this flag); this is the image fallback for docker run, etc.
+ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
+
 # -----------------------
 # Jenkins config
 # -----------------------

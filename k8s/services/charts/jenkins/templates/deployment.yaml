@@ -43,6 +43,8 @@ spec:
           env:
             - name: JAVA_OPTS
               value: {{ .Values.javaOpts | quote }}
+            - name: JENKINS_OPTS
+              value: {{ .Values.jenkinsOpts | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

@@ -56,6 +56,10 @@ resources:
 
 javaOpts: "-XX:+UseG1GC -Djenkins.install.runSetupWizard=false"
 
+# Passed to the controller process in addition to JAVA_OPTS (see jenkins.sh). Duplicate
+# -Djenkins.install.runSetupWizard=false is harmless and covers mis-merged javaOpts.
+jenkinsOpts: "-Djenkins.install.runSetupWizard=false"
+
 extraEnv: []
 
 livenessProbe:
