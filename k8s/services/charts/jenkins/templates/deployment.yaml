@@ -48,6 +48,15 @@ spec:
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+            {{- if .Values.security.localAdmin.enabled }}
+            - name: JENKINS_ADMIN_USERNAME
+              value: {{ .Values.security.localAdmin.username | quote }}
+            - name: JENKINS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.security.localAdmin.existingSecret | required "security.localAdmin.existingSecret is required when security.localAdmin.enabled is true" }}
+                  key: {{ .Values.security.localAdmin.existingSecretKey }}
+            {{- end }}
           {{- if .Values.startupProbe.enabled }}
           startupProbe:
             httpGet:

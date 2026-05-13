@@ -15,6 +15,18 @@
 #   ./k8s/scripts/deploy.sh (see --help): JENKINS_IMAGE_REPOSITORY, or GCP_PROJECT_ID+GCP_REGION+ARTIFACT_REGISTRY_REPOSITORY,
 #   or terraform output jenkins_image_repository. deploy-platform.sh exports JENKINS_IMAGE_REPOSITORY when
 #   ARTIFACT_REGISTRY_REPOSITORY is set (with project/region from terraform.tfvars).
+#
+# Login / security: create the Secret in the Jenkins namespace before install (or rotate and restart the pod):
+#   kubectl create secret generic jenkins-admin -n dev-estateflow --from-literal=password='YOUR_STRONG_PASSWORD'
+# Init script 01-configureSecurityRealm.groovy enables Hudson private security + full control once logged in
+# (anonymous access off). Rebuild the controller image after changing init.groovy.d.
+
+security:
+  localAdmin:
+    enabled: true
+    username: admin
+    existingSecret: jenkins-admin
+    existingSecretKey: password
 
 image:
   tag: dev

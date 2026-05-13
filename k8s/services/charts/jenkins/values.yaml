@@ -62,6 +62,15 @@ jenkinsOpts: "-Djenkins.install.runSetupWizard=false"
 
 extraEnv: []
 
+# Local admin user (Hudson private security realm). Requires a Kubernetes Secret before first meaningful boot.
+# When enabled, the controller reads JENKINS_ADMIN_PASSWORD from the Secret (see init.groovy.d/01-configureSecurityRealm.groovy).
+security:
+  localAdmin:
+    enabled: false
+    username: admin
+    existingSecret: ""
+    existingSecretKey: password
+
 # Jenkins often needs several minutes before HTTP responds; startupProbe gates
 # liveness/readiness until the first successful check (K8s 1.16+).
 startupProbe:

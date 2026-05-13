@@ -176,8 +176,9 @@ Jenkins only runs **`init.groovy.d/*.groovy`** (name must **end with `.groovy`**
 
 This repo ships:
 
-- **`00-disableInstallWizard.groovy`** — runs first (before **`97-...`**): sets **`InstallState.INITIAL_SETUP_COMPLETED`** and **`save()`**. Use together with **`-Djenkins.install.runSetupWizard=false`** on the JVM (see image **`ENV JAVA_OPTS`**, Helm **`javaOpts`** / **`jenkinsOpts`**).
-- **`97-setCSRFAndScriptSecurity.groovy`** — runs your existing **`preapproveAll()`** + CSRF-related settings.
+- **`00-disableInstallWizard.groovy`** — runs first: sets **`InstallState.INITIAL_SETUP_COMPLETED`** and **`save()`**. Use together with **`-Djenkins.install.runSetupWizard=false`** on the JVM (see **`javaOpts`** / **`jenkinsOpts`**).
+- **`01-configureSecurityRealm.groovy`** — if **`JENKINS_ADMIN_PASSWORD`** is set (from a Kubernetes Secret via Helm **`security.localAdmin`**), enables **Hudson private security** and **full control once logged in** (anonymous access off). Create Secret **`jenkins-admin`** in the Jenkins namespace before relying on this (see **`k8s/env/<env>/jenkins-values.yaml`**).
+- **`97-setCSRFAndScriptSecurity.groovy`** — enables **`DefaultCrumbIssuer`** (CSRF protection) and runs **`preapproveAll()`** for Job DSL script approval.
 - **`seedJobs.groovy`** — creates **`Jenkins-Seed_DSL`** with **`GIT_BRANCH`** and **`EMAIL_RECIPIENTS`** parameters and starts the first build via **`scheduleBuild2`** with defaults (`main` / empty). If an old seed job exists without parameters, delete the job or wipe the controller PVC once so init can recreate it.
 - **`zzz-approvePendingJobDslScripts.groovy`** — periodically runs **`ScriptApproval.preapproveAll()`** plus **`save()`** (there is no `approvePendingScripts()` API). That clears pending whole-script entries after Job DSL runs, including when the first seed happens long after boot. Rebuild the controller image and restart the pod after changing this file.
 
