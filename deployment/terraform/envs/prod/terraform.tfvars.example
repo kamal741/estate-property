@@ -1,5 +1,8 @@
 # Copy to terraform.tfvars (gitignored) and set real values.
-# Never commit terraform.tfvars — it is listed in the repository .gitignore.
+# Never commit terraform.tfvars — it is gitignored under deployment/terraform/envs/*/.
+#
+# region — used for regional GCP resources and as the default GCS location for the
+#          Terraform state bucket when deploy-platform.sh creates it.
 
 project_id = "your-gcp-project-id"
 region     = "us-central1"

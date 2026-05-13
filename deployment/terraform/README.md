@@ -6,7 +6,7 @@ This layout uses **one state per environment** under `deployment/terraform/envs/
 
 - Terraform `>= 1.5`
 - A GCP project with billing enabled
-- A **GCS bucket** for remote state (see `envs/*/backend.tf`) — create it once per org; use separate prefixes or buckets per env
+- A **GCS bucket** for remote state — the bucket name is **not** hard-coded in `backend.tf`; **`deployment/scripts/deploy-platform.sh`** can create it and passes it to **`terraform init -backend-config=bucket=...`**. You can also create the bucket yourself and set **`TERRAFORM_STATE_BUCKET`** / **`SKIP_GCLOUD_BOOTSTRAP=1`**.
 - IAM for whoever runs Terraform: ability to enable APIs, create Cloud SQL, Redis, buckets, secrets, and (for prod) VPC + private service access
 
 ## First-time setup
@@ -19,50 +19,43 @@ This layout uses **one state per environment** under `deployment/terraform/envs/
 
 2. Edit `terraform.tfvars` and set `project_id` and `region`. **Do not commit** `terraform.tfvars` (it is gitignored).
 
-3. **Bootstrap state backend** (once per bucket):
+3. **Remote state (GCS)** — `envs/*/backend.tf` only sets the **`prefix`** (`dev` / `prod`). The **bucket name** is supplied at **`terraform init`** (see **`deployment/scripts/deploy-platform.sh`**), which by default:
 
-   - The bucket name in **`envs/*/backend.tf`** must exist and be **globally unique** across all of GCS (change the name in `backend.tf` if `terraform-state-bucket` is taken).
-   - Whoever runs **`terraform init`** needs object access on that bucket, including **`storage.objects.list`** (Terraform lists “workspaces” under your prefix). Grant **`roles/storage.objectAdmin`** on the bucket (narrower than project-wide Storage Admin).
+   - Enables **`cloudresourcemanager.googleapis.com`** and **`serviceusage.googleapis.com`** (idempotent).
+   - Creates **`gs://estateflow-bucket-<env>`** in **`GCS_STATE_BUCKET_LOCATION`** if unset (defaults to **`region`** from `terraform.tfvars`).
+   - Runs **`terraform init -backend-config="bucket=..."`**.
 
-   Example (replace project, bucket, and member with yours; use your Google account or a CI service account):
+   Override defaults:
 
    ```bash
-   export PROJECT_ID="your-gcp-project-id"
-   export BUCKET="terraform-state-bucket"   # must match backend.tf
-
-   gcloud config set project "$PROJECT_ID"
-   gcloud storage buckets create "gs://${BUCKET}" --project="$PROJECT_ID" --location=US --uniform-bucket-level-access
-
-   gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
-     --member="user:chauhan.kamaldeep@gmail.com" \
-     --role="roles/storage.objectAdmin"
+   ./deployment/scripts/deploy-platform.sh dev                                  # bucket estateflow-bucket-dev, location = region in tfvars
+   ./deployment/scripts/deploy-platform.sh dev my-project-tf-state us-east1     # explicit bucket + GCS location
+   TERRAFORM_STATE_BUCKET=my-bucket GCS_STATE_BUCKET_LOCATION=us-central1 ./deployment/scripts/deploy-platform.sh dev
    ```
 
-   If the bucket lives in **another** GCP project, create it there and add the same **`--member`** binding on that bucket in that project.
+   GCS bucket names are **global**; if `estateflow-bucket-dev` is taken, pass a unique name as the second argument or set **`TERRAFORM_STATE_BUCKET`**.
 
-   **If `add-iam-policy-binding` fails with `storage.buckets.getIamPolicy` denied:**
+   Grant your principal **`roles/storage.objectAdmin`** on that bucket (or project-level if your org requires it). See troubleshooting below if **`getIamPolicy`** is denied.
 
-   - Confirm **`echo "$BUCKET"`** is the **same** name you passed to **`buckets create`** (GCS names are global; if `terraform-state-bucket` was never created by you, you may be targeting a bucket in another project or a stale `export`).
-   - Verify the bucket is in your project: `gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT_ID"`.
-   - Changing bucket IAM requires **`storage.buckets.getIamPolicy` / `setIamPolicy`**. If org policy blocks that for your role, ask a **project Owner** to either run the **`add-iam-policy-binding`** command above **or** grant you **`roles/storage.admin`** on the project, then retry.
-   - **Workaround (project Owner only):** grant Terraform state access without editing that bucket’s IAM directly — attach **`roles/storage.objectAdmin`** at the **project** level (applies to objects in all buckets in that project; use a dedicated project or dedicated bucket if you need least privilege):
+   **Migrating from an older backend** that had `bucket` inside `backend.tf`: run once with **`TERRAFORM_INIT_EXTRA=-reconfigure`** (or **`-migrate-state`** if Terraform prompts).
 
-     ```bash
-     gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-       --member="user:chauhan.kamaldeep@gmail.com" \
-       --role="roles/storage.objectAdmin"
-     ```
-
-4. Initialize and apply from the env directory:
+4. Initialize and apply manually (optional if you use **`deploy-platform.sh`**):
 
    ```bash
    cd deployment/terraform/envs/dev
-   terraform init
+   terraform init -backend-config="bucket=YOUR_BUCKET_NAME"
    terraform plan
    terraform apply
    ```
 
-   From the repo root, **`deployment/scripts/deploy-platform.sh`** runs **`terraform init`** in that env directory before **`apply`**, so a fresh clone (for example Cloud Shell) does not require a manual **`init`** first. If Terraform reports a backend configuration change, run once with **`TERRAFORM_INIT_EXTRA=-reconfigure`** (see that script’s header comment).
+   From the repo root, **`deployment/scripts/deploy-platform.sh`** performs bootstrap, **`init`**, **`apply`**, kubeconfig sync, and Helm for Jenkins + ingress.
+
+### Remote state IAM troubleshooting
+
+If **`add-iam-policy-binding`** fails with **`storage.buckets.getIamPolicy`** denied:
+
+- Confirm the bucket name matches the one you created and **`gcloud storage buckets describe "gs://$BUCKET" --project="$PROJECT_ID"`** succeeds.
+- Ask a **project Owner** to run the binding or grant **`roles/storage.admin`**, or use project-level **`roles/storage.objectAdmin`** (see previous examples with **`gcloud projects add-iam-policy-binding`**).
 
 ## Secrets and passwords
 

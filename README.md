@@ -91,14 +91,18 @@ Default directory: **`k8s/env/<env>/manifests/`** (if `kustomization.yaml` exist
 
 ## 3. One-shot platform bootstrap (`deployment/scripts/deploy-platform.sh`)
 
-Runs **Terraform apply** (unless skipped), refreshes **kubeconfig**, then **Helm** for **Jenkins** and **platform-ingress** only (no app microservices here).
+Runs **gcloud** bootstrap (APIs + optional state bucket), **`terraform init`** with **`-backend-config=bucket=...`**, **`terraform apply`** (unless skipped), **kubeconfig** refresh, then **Helm** for **Jenkins** and **platform-ingress** only.
 
 ```bash
 ./deployment/scripts/deploy-platform.sh dev
+./deployment/scripts/deploy-platform.sh dev my-unique-state-bucket us-central1
 ```
 
-- **`SKIP_TERRAFORM=1`**: skip `terraform apply` (cluster already exists); still runs get-credentials + Helm.
+- **`SKIP_TERRAFORM=1`**: skip `terraform apply`; still runs bootstrap (unless skipped), `init`, get-credentials + Helm.
+- **`SKIP_GCLOUD_BOOTSTRAP=1`**: skip `gcloud services enable` and state bucket create (bucket must already exist; you still need IAM).
+- **`TERRAFORM_STATE_BUCKET`** / **`GCS_STATE_BUCKET_LOCATION`**: override default state bucket name and GCS location (or pass as 2nd and 3rd CLI args).
 - **`TERRAFORM_APPLY_EXTRA`**: extra arguments to `terraform apply` (e.g. targeted apply).
+- **`TERRAFORM_INIT_EXTRA`**: e.g. **`-reconfigure`** after changing backend settings.
 
 Helm is invoked via **`k8s/scripts/deploy.sh`** (not `jenkins-gke-env-from-terraform.sh`, which only prints CI context).
 

@@ -24,8 +24,9 @@ routes:
       app.kubernetes.io/name: jenkins
       app.kubernetes.io/component: ingress
 
+  # Namespace matches Terraform (dev/main.tf): kubernetes_namespace_v1.app → dev-estateflow
   - name: spring-boot-api
-    namespace: apps
+    namespace: dev-estateflow
     host: api.dev.example.com
     serviceName: api
     servicePort: 8080

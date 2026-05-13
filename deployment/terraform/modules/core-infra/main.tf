@@ -8,15 +8,27 @@ locals {
     var.extra_labels
   )
 
-  project_services = toset([
-    "sqladmin.googleapis.com",
-    "redis.googleapis.com",
-    "storage.googleapis.com",
-    "secretmanager.googleapis.com",
-    "compute.googleapis.com",
-    "servicenetworking.googleapis.com",
-    "container.googleapis.com",
-  ])
+project_services = toset([
+  # 🔥 Core (MUST HAVE)
+  "cloudresourcemanager.googleapis.com",
+  "serviceusage.googleapis.com",
+  "iam.googleapis.com",
+
+  # 🔧 Compute & Networking
+  "compute.googleapis.com",
+  "servicenetworking.googleapis.com",
+
+  # 🚀 GKE
+  "container.googleapis.com",
+
+  # 🗄️ Databases
+  "sqladmin.googleapis.com",
+  "redis.googleapis.com",
+
+  # 📦 Storage & Secrets
+  "storage.googleapis.com",
+  "secretmanager.googleapis.com",
+])
 
   gke_cluster_name = "${var.env}-estateflow-cluster"
   gke_namespace    = coalesce(var.gke_namespace, "${var.env}-estateflow")

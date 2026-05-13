@@ -1,6 +1,7 @@
 terraform {
   backend "gcs" {
-    bucket = "estateflow-tf-state-1778676685"
+    # bucket is supplied at init time, e.g. deployment/scripts/deploy-platform.sh:
+    #   terraform init -backend-config="bucket=YOUR_BUCKET"
     prefix = "dev"
   }
 }

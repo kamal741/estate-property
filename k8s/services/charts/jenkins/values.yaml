@@ -62,19 +62,28 @@ jenkinsOpts: "-Djenkins.install.runSetupWizard=false"
 
 extraEnv: []
 
+# Jenkins often needs several minutes before HTTP responds; startupProbe gates
+# liveness/readiness until the first successful check (K8s 1.16+).
+startupProbe:
+  enabled: true
+  path: /login
+  periodSeconds: 10
+  timeoutSeconds: 15
+  failureThreshold: 42
+
 livenessProbe:
   path: /login
-  initialDelaySeconds: 120
+  initialDelaySeconds: 90
   periodSeconds: 30
-  timeoutSeconds: 5
+  timeoutSeconds: 15
   failureThreshold: 5
 
 readinessProbe:
   path: /login
-  initialDelaySeconds: 60
+  initialDelaySeconds: 10
   periodSeconds: 15
-  timeoutSeconds: 5
-  failureThreshold: 10
+  timeoutSeconds: 15
+  failureThreshold: 6
 
 nodeSelector: {}
 tolerations: []
