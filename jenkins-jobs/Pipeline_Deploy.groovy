@@ -15,6 +15,8 @@ def email_recipients = pdp?.getParameterDefinition('EMAIL_RECIPIENTS')?.defaultV
 def sched = curJob?.triggers?.find { it.value instanceof TimerTrigger }?.value?.spec ?: '#0 12 * * *'
 def git_brnch_deploy = pdp?.getParameterDefinition('GIT_BRANCH_DEPLOY')?.defaultValue ?: 'main'
 def git_brnch_service = pdp?.getParameterDefinition('GIT_BRANCH_SERVICE')?.defaultValue ?: 'main'
+def git_cred_deploy = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_DEPLOY')?.defaultValue ?: ''
+def git_cred_service = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_SERVICE')?.defaultValue ?: ''
 
 pipelineJob("$job_name") {
     description("""\
@@ -33,6 +35,8 @@ pipelineJob("$job_name") {
         stringParam('EMAIL_RECIPIENTS', "$email_recipients", 'Please be sure to add a comma, between every email address.<br>')
         stringParam('GIT_BRANCH_DEPLOY', git_brnch_deploy, 'Git branch (estate-property)')
         stringParam('GIT_BRANCH_SERVICE', git_brnch_service, 'Git branch (EstateFlow)')
+        stringParam('GIT_CREDENTIALS_ID_DEPLOY', "$git_cred_deploy", 'Jenkins credential ID for HTTPS checkout of estate-property. Leave empty if the repo is public.')
+        stringParam('GIT_CREDENTIALS_ID_SERVICE', "$git_cred_service", 'Jenkins credential ID for HTTPS checkout of pizenith-technologies/EstateFlow. Required for private repos: use Username with password (GitHub username + Personal Access Token); GitHub does not accept account passwords for Git over HTTPS.')
         choiceParam('SERVICE_NAME', ['estateflow-admin-service', 'estateflow-brokerage-agent-service', 'estateflow-client-service'], 'Service name')
     }
 
@@ -76,17 +80,37 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                dir('estate-property') {
-                    git branch: "${params.GIT_BRANCH_DEPLOY}",
-                        changelog: false,
-                        poll: false,
-                        url: 'https://github.com/kamal741/estate-property.git'
-                }
-                dir('EstateFlow') {
-                    git branch: "${params.GIT_BRANCH_SERVICE}",
-                        changelog: false,
-                        poll: false,
-                        url: 'https://github.com/pizenith-technologies/EstateFlow.git'
+                script {
+                    def credDeploy = params.GIT_CREDENTIALS_ID_DEPLOY?.trim()
+                    def credService = params.GIT_CREDENTIALS_ID_SERVICE?.trim()
+                    dir('estate-property') {
+                        if (credDeploy) {
+                            git branch: "${params.GIT_BRANCH_DEPLOY}",
+                                changelog: false,
+                                poll: false,
+                                credentialsId: credDeploy,
+                                url: 'https://github.com/kamal741/estate-property.git'
+                        } else {
+                            git branch: "${params.GIT_BRANCH_DEPLOY}",
+                                changelog: false,
+                                poll: false,
+                                url: 'https://github.com/kamal741/estate-property.git'
+                        }
+                    }
+                    dir('EstateFlow') {
+                        if (credService) {
+                            git branch: "${params.GIT_BRANCH_SERVICE}",
+                                changelog: false,
+                                poll: false,
+                                credentialsId: credService,
+                                url: 'https://github.com/pizenith-technologies/EstateFlow.git'
+                        } else {
+                            git branch: "${params.GIT_BRANCH_SERVICE}",
+                                changelog: false,
+                                poll: false,
+                                url: 'https://github.com/pizenith-technologies/EstateFlow.git'
+                        }
+                    }
                 }
             }
         }
