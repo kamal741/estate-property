@@ -18,8 +18,13 @@ if (j.isUseSecurity()
 
 String pass = (System.getenv("JENKINS_ADMIN_PASSWORD") ?: "").trim()
 if (!pass) {
-    println("01-configureSecurityRealm: WARN — JENKINS_ADMIN_PASSWORD is not set. Jenkins may remain without login.")
-    println("    Create a Secret and set security.localAdmin in Helm (see jenkins-values.yaml comments).")
+    String ns = (System.getenv("POD_NAMESPACE") ?: "YOUR_NAMESPACE").trim()
+    String secret = (System.getenv("JENKINS_ADMIN_SECRET_NAME") ?: "jenkins-admin").trim()
+    String deploy = (System.getenv("JENKINS_K8S_DEPLOYMENT_NAME") ?: "jenkins").trim()
+    println("01-configureSecurityRealm: WARN — JENKINS_ADMIN_PASSWORD is not set (Secret missing or Helm security.localAdmin.optionalSecret).")
+    println("    Jenkins stays without local login until the Secret exists and this init runs again (restart pod).")
+    println("    kubectl create secret generic ${secret} -n ${ns} --from-literal=password='YOUR_STRONG_PASSWORD'")
+    println("    kubectl rollout restart deployment/${deploy} -n ${ns}")
     return
 }
 

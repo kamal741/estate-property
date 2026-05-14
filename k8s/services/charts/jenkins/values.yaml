@@ -73,29 +73,33 @@ security:
     existingSecretKey: password
     optionalSecret: false
 
-# Jenkins often needs several minutes before HTTP responds; startupProbe gates
-# liveness/readiness until the first successful check (K8s 1.16+).
+# Startup: tcpSocket (default) waits for port 8080 only. HTTP /login often returns 503 while plugins load and
+# times out waiting for headers — http probes would kill the pod. Set startupProbe.tcpSocket: false to use httpGet.path instead.
 startupProbe:
   enabled: true
+  tcpSocket: true
   path: /login
-  periodSeconds: 10
-  timeoutSeconds: 15
-  failureThreshold: 42
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 180
 
+# After startup succeeds, Jenkins may still serve 503 on /login for several minutes — keep liveness lenient.
 livenessProbe:
   path: /login
-  initialDelaySeconds: 90
-  periodSeconds: 30
-  timeoutSeconds: 15
-  failureThreshold: 5
+  initialDelaySeconds: 120
+  periodSeconds: 20
+  timeoutSeconds: 30
+  failureThreshold: 30
 
 readinessProbe:
   path: /login
-  initialDelaySeconds: 10
-  periodSeconds: 15
-  timeoutSeconds: 15
-  failureThreshold: 6
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 30
+  failureThreshold: 60
 
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+env: dev

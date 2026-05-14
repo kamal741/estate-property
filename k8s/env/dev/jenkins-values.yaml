@@ -50,3 +50,5 @@ resources:
     memory: 3Gi
 
 javaOpts: "-XX:+UseG1GC -Djenkins.install.runSetupWizard=false -Xms512m -Xmx2048m"
+
+env: dev

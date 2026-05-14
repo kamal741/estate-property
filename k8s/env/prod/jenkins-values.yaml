@@ -45,3 +45,5 @@ resources:
     memory: 6Gi
 
 javaOpts: "-XX:+UseG1GC -Djenkins.install.runSetupWizard=false -Xms1g -Xmx5g"
+
+env: prod

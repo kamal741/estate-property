@@ -8,6 +8,8 @@ USER root
 
 ENV KUBECTL_VERSION=v1.33.8
 ENV REDIS_VERSION=7.2.5
+ENV HELM_VERSION=v3.16.4
+ENV MAVEN_VERSION=3.9.15
 
 # -----------------------
 # Base tools (simplified)
@@ -81,6 +83,44 @@ ENV CLASSPATH="/usr/local/lib/postgresql.jar"
 RUN curl -L -o /usr/local/bin/kubectl \
     https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl && \
     chmod +x /usr/local/bin/kubectl
+
+# -----------------------
+# Helm (PUBLIC) — k8s/scripts/deploy.sh, Pipeline_Deploy
+# -----------------------
+RUN curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+    | tar xz -C /tmp \
+    && mv /tmp/linux-amd64/helm /usr/local/bin/helm \
+    && chmod +x /usr/local/bin/helm \
+    && rm -rf /tmp/linux-amd64
+
+# -----------------------
+# Docker CLI + Google Cloud SDK (apt) — Pipeline_Deploy build/push + gcloud auth
+# -----------------------
+RUN install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
+    && chmod a+r /etc/apt/keyrings/docker.asc \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+        > /etc/apt/sources.list.d/docker.list \
+    && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+        | gpg --dearmor -o /etc/apt/keyrings/google-cloud.gpg \
+    && chmod a+r /etc/apt/keyrings/google-cloud.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/google-cloud.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+        > /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends docker-ce-cli google-cloud-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# -----------------------
+# Apache Maven — EstateFlow verify scripts / mvn pipelines
+# -----------------------
+RUN curl -fsSL "https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
+    | tar xz -C /opt \
+    && ln -sfn "/opt/apache-maven-${MAVEN_VERSION}" /opt/maven
+
+ENV PATH="/opt/maven/bin:/opt/venv/bin:$PATH"
+
+# Jenkins user can use host Docker socket when mounted (group on node must match or use rootless)
+RUN if getent group docker >/dev/null 2>&1; then usermod -aG docker jenkins; fi
 
 # -----------------------
 # flux CLI
