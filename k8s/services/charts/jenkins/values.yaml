@@ -45,6 +45,9 @@ persistence:
   accessMode: ReadWriteOnce
   size: 10Gi
   mountPath: /var/jenkins_home
+  # Retain PVC on helm uninstall; do not use HELM_UPGRADE_FORCE with this chart — bound PVC spec is immutable.
+  annotations:
+    helm.sh/resource-policy: keep
 
 resources:
   limits:

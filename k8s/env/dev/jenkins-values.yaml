@@ -21,8 +21,8 @@
 # With optionalSecret: true (dev default), Helm can install before the Secret exists; init enables security only after the env is set (create Secret + rollout restart).
 #
 # Helm SSA conflict on Service (e.g. "conflict with kubectl-patch" on spec.type): the Service was changed outside Helm.
-# One-time fix: HELM_UPGRADE_FORCE=1 ./k8s/scripts/deploy.sh dev jenkins — or kubectl delete svc jenkins -n dev-estateflow then redeploy.
-# Helm 4+: HELM_UPGRADE_FORCE runs --server-side=false --force-replace; older Helm uses --force.
+# Fix: kubectl delete svc jenkins -n dev-estateflow then redeploy (do not use HELM_UPGRADE_FORCE for jenkins: it tries to
+# replace the PVC and fails on immutable bound fields like volumeName). deploy.sh ignores HELM_UPGRADE_FORCE for jenkins.
 
 security:
   localAdmin:

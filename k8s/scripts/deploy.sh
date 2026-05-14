@@ -39,6 +39,8 @@ show_usage() {
     Override with NAMESPACE=... or JENKINS_HELM_NAMESPACE=... (NAMESPACE wins).
   Helm upgrades: HELM_UPGRADE_FORCE=1 fixes SSA field conflicts by forcing resource replacement. On Helm 4+ this uses
     --server-side=false --force-replace (they cannot be combined with SSA). On older Helm, --force is used instead.
+    Not applied to the jenkins chart: force-replace hits the bound Jenkins PVC (immutable spec / volumeName). For Service
+    drift on Jenkins, delete the Service and redeploy without HELM_UPGRADE_FORCE (see k8s/env/<env>/jenkins-values.yaml).
   Extra helm args: any other `helm upgrade` flags (e.g. --set key=val, --dry-run).
 EOF
 }
@@ -153,14 +155,18 @@ helm_upgrade() {
 
   local helm_upgrade_extra=()
   if [[ "${HELM_UPGRADE_FORCE:-}" == "1" ]]; then
-    local helm_help
-    helm_help="$(helm upgrade -h 2>&1 || true)"
-    if grep -q -- '--force-replace' <<<"$helm_help" && grep -q -- '--server-side' <<<"$helm_help"; then
-      helm_upgrade_extra+=(--server-side=false --force-replace)
-      echo "    (HELM_UPGRADE_FORCE=1: helm --server-side=false --force-replace)"
+    if [[ "$service" == "jenkins" ]]; then
+      echo "    (HELM_UPGRADE_FORCE ignored for jenkins: --force-replace breaks bound PVCs; omit HELM_UPGRADE_FORCE or delete conflicting Service — k8s/env/$env/jenkins-values.yaml)"
     else
-      helm_upgrade_extra+=(--force)
-      echo "    (HELM_UPGRADE_FORCE=1: helm --force)"
+      local helm_help
+      helm_help="$(helm upgrade -h 2>&1 || true)"
+      if grep -q -- '--force-replace' <<<"$helm_help" && grep -q -- '--server-side' <<<"$helm_help"; then
+        helm_upgrade_extra+=(--server-side=false --force-replace)
+        echo "    (HELM_UPGRADE_FORCE=1: helm --server-side=false --force-replace)"
+      else
+        helm_upgrade_extra+=(--force)
+        echo "    (HELM_UPGRADE_FORCE=1: helm --force)"
+      fi
     fi
   fi
 

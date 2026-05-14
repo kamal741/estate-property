@@ -16,8 +16,8 @@
 # Login / security (required for prod — create Secret before install or rollout will fail):
 #   kubectl create secret generic jenkins-admin -n prod-estateflow --from-literal=password='YOUR_STRONG_PASSWORD'
 #
-# Helm SSA conflict on Service: HELM_UPGRADE_FORCE=1 ./k8s/scripts/deploy.sh prod jenkins — or delete the Service and redeploy.
-# Helm 4+: uses --server-side=false --force-replace; older Helm uses --force.
+# Helm SSA conflict on Service: delete the Service then redeploy (do not use HELM_UPGRADE_FORCE for jenkins — PVC replace
+# fails on immutable bound fields). deploy.sh ignores HELM_UPGRADE_FORCE for the jenkins chart.
 
 security:
   localAdmin:
