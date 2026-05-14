@@ -25,7 +25,8 @@ pipelineJob("$job_name") {
     Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check.
     <b>ENV</b> is not a job parameter; it must be defined on the controller, folder, or agent (e.g. <code>ENV=dev</code>).
     <b>GCP_AUTH_MODE</b>: <code>workload_identity</code> (default) uses the <b>pod</b> Kubernetes service account + GKE Workload Identity (no JSON key): bind the pod SA to a GCP service account and grant it Artifact Registry + GKE deploy roles; build must run <i>inside</i> the cluster. <code>secret_key</code> uses <b>GCP_CREDENTIALS_ID</b> (Secret file JSON) and <code>gcloud auth activate-service-account</code> (for agents outside the cluster or until WI is set up).
-    <b>JENKINS_K8S_SERVICE_ACCOUNT</b> should match <code>k8s/services/charts/jenkins/values.yaml</code> <code>serviceAccount.name</code> (default <code>jenkins</code>) — that is the K8s identity Workload Identity annotates to your GCP service account.
+    <b>JENKINS_K8S_SERVICE_ACCOUNT</b> should match <code>k8s/services/charts/jenkins/values.yaml</code> <code>serviceAccount.name</code> (default <code>jenkins</code>) — that is the K8s identity Workload Identity annotates to your GCP service account. For <code>workload_identity</code> + <code>IMAGE_BUILD_MODE=cloud_build</code>, grant that GCP SA <code>roles/cloudbuild.builds.editor</code> (or equivalent) so <code>gcloud builds submit</code> succeeds.
+    <b>Cloud Build</b>: one file <code>jenkins/cloudbuild-estateflow.yaml</code> for every EstateFlow service; the pipeline passes <code>_DOCKERFILE</code> and <code>_AR_IMAGE</code> substitutions only — no extra YAML per service.
     Update this job from the seed repo .groovy (${scriptname}) as needed.<br>
     """.stripIndent())
 
@@ -42,6 +43,7 @@ pipelineJob("$job_name") {
         stringParam('GIT_CREDENTIALS_ID_DEPLOY', "$git_cred_deploy", 'Jenkins credential ID for HTTPS checkout of estate-property. Leave empty if the repo is public.')
         stringParam('GIT_CREDENTIALS_ID_SERVICE', "$git_cred_service", 'Jenkins credential ID for HTTPS checkout of pizenith-technologies/EstateFlow. Required for private repos: use Username with password (GitHub username + Personal Access Token); GitHub does not accept account passwords for Git over HTTPS.')
         choiceParam('SERVICE_NAME', ['estateflow-admin-service', 'estateflow-brokerage-agent-service', 'estateflow-client-service'], 'Service name')
+        choiceParam('IMAGE_BUILD_MODE', ['cloud_build', 'docker'], 'cloud_build: one shared <code>jenkins/cloudbuild-estateflow.yaml</code> + <code>gcloud builds submit</code> (substitutions pick Dockerfile + image; no Docker socket). docker: local build/push (needs <code>/var/run/docker.sock</code>).')
         choiceParam('GCP_AUTH_MODE', ['workload_identity', 'secret_key'], 'workload_identity: no JSON key; pod uses GKE Workload Identity (see job description). secret_key: use GCP_CREDENTIALS_ID JSON file + activate-service-account.')
         stringParam('GCP_CREDENTIALS_ID', "$gcp_cred_id", 'Required when <b>GCP_AUTH_MODE</b> is <code>secret_key</code>: Jenkins <b>Secret file</b> credential ID (GCP service account JSON). Ignored for <code>workload_identity</code>.')
         stringParam('JENKINS_K8S_SERVICE_ACCOUNT', "$jenkins_k8s_sa", 'Must match Jenkins Helm <code>serviceAccount.name</code> (chart values); annotate this K8s SA for Workload Identity to your GCP deploy service account.')
@@ -139,6 +141,13 @@ pipeline {
         stage('Pre-Verification') {
             steps {
                 script {
+                    def buildMode = (params.IMAGE_BUILD_MODE ?: 'cloud_build').trim()
+                    if (buildMode == 'cloud_build') {
+                        def cb = "${env.WORKSPACE}/estate-property/jenkins/cloudbuild-estateflow.yaml"
+                        if (!fileExists(cb)) {
+                            error "Cloud Build config missing: ${cb} (checkout estate-property on a branch that includes jenkins/cloudbuild-estateflow.yaml)"
+                        }
+                    }
                     def services = [params.SERVICE_NAME]
                     for (svc in services) {
                         echo "Verifying ${svc} in ${env.ENV} environment"
@@ -146,7 +155,7 @@ pipeline {
                         if (!fileExists("${base}/pom.xml")) {
                             error "pom.xml missing for ${svc} (${env.ENV})"
                         }
-                        if (!fileExists("${base}/Dockerfile.${svc}")) {
+                        if (!fileExists("${env.WORKSPACE}/EstateFlow/EstateFlow-Service/Dockerfile.${svc}")) {
                             error "Dockerfile.${svc} missing for ${svc} (${env.ENV})"
                         }
                         def chartDeploy = "${env.WORKSPACE}/estate-property/k8s/services/charts/${svc}/templates/deployment.yaml"
@@ -206,15 +215,26 @@ pipeline {
                 echo 'Building the project...'
                 script {
                     def services = [params.SERVICE_NAME]
+                    def imageMode = (params.IMAGE_BUILD_MODE ?: 'cloud_build').trim()
                     for (svc in services) {
-                        echo "Building ${svc} in ${env.ENV} environment"
-                        sh """
-                        cd "${env.WORKSPACE}/EstateFlow/EstateFlow-Service"
-                        docker build -f Dockerfile.${svc} -t ${env.IMAGE_REPOSITORY}/${svc}:${env.IMAGE_TAG} .
-                        """
-                        sh """
-                        docker push ${env.IMAGE_REPOSITORY}/${svc}:${env.IMAGE_TAG}
-                        """
+                        echo "Building ${svc} in ${env.ENV} environment (IMAGE_BUILD_MODE=${imageMode})"
+                        if (imageMode == 'docker') {
+                            sh """
+                            cd "${env.WORKSPACE}/EstateFlow/EstateFlow-Service"
+                            docker build -f Dockerfile.${svc} -t ${env.IMAGE_REPOSITORY}/${svc}:${env.IMAGE_TAG} .
+                            """
+                            sh """
+                            docker push ${env.IMAGE_REPOSITORY}/${svc}:${env.IMAGE_TAG}
+                            """
+                        } else {
+                            sh """
+                            export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+                            cd "${env.WORKSPACE}/EstateFlow/EstateFlow-Service"
+                            gcloud builds submit . \\
+                                --config="${env.WORKSPACE}/estate-property/jenkins/cloudbuild-estateflow.yaml" \\
+                                --substitutions=_DOCKERFILE=Dockerfile.${svc},_AR_IMAGE=${env.IMAGE_REPOSITORY}/${svc}:${env.IMAGE_TAG}
+                            """
+                        }
                     }
                 }
             }

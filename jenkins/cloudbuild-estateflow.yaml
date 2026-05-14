@@ -1,0 +1,37 @@
+# One Cloud Build config for **all** EstateFlow-Service images (admin, brokerage-agent, client, future modules).
+# Submit with **context = EstateFlow-Service repo root** (where Dockerfile.estateflow-* and pom.xml live).
+# Jenkins passes per-build substitutions only; do not add a new YAML per service.
+#
+# Example substitutions (pick one per build; Jenkins sets these automatically from SERVICE_NAME):
+#   _DOCKERFILE=Dockerfile.estateflow-admin-service
+#   _DOCKERFILE=Dockerfile.estateflow-brokerage-agent-service
+#   _DOCKERFILE=Dockerfile.estateflow-client-service
+#   _AR_IMAGE=REGION-docker.pkg.dev/PROJECT/estateflow-dev/SERVICE_NAME:TAG
+#
+# Submitting identity: roles/cloudbuild.builds.editor (or builds.create). Push: Cloud Build SA → grant
+# roles/artifactregistry.writer on the Artifact Registry repo if pushes fail.
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-f"
+      - "${_DOCKERFILE}"
+      - "-t"
+      - "${_AR_IMAGE}"
+      - "."
+
+images:
+  - "${_AR_IMAGE}"
+
+# Defaults below are **never used in production** by Jenkins: each `gcloud builds submit` passes
+# `--substitutions=_DOCKERFILE=...,_AR_IMAGE=...` and overrides them. They exist so `gcloud` can
+# validate the config; any non-empty strings work. Do not add a YAML file per Dockerfile.
+substitutions:
+  _DOCKERFILE: "Dockerfile.estateflow-REPLACE_ME"
+  _AR_IMAGE: "REPLACE_ME"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 5400s
