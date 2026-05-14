@@ -1,0 +1,6 @@
+apiVersion: v2
+name: estateflow-admin-service
+description: EstateFlow admin API (Spring WebFlux), image from EstateFlow-Service Dockerfile.estateflow-admin-service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

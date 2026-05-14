@@ -1,0 +1,108 @@
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: estateflow-admin-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 101
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 100
+  runAsGroup: 101
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+containerPort: 8080
+
+# Passed to the JVM (image entrypoint: exec java $JAVA_OPTS -jar …).
+javaOpts: "-XX:MaxRAMPercentage=75.0"
+
+# Same keys as **estateflow-admin** in EstateFlow-Service **docker-compose.yml** (defaults match that file).
+# Override per env in k8s/env/<env>/estateflow-admin-service-values.yaml. Use a map value for valueFrom, e.g.:
+#   JWT_SECRET:
+#     valueFrom:
+#       secretKeyRef:
+#         name: estateflow-admin-secrets
+#         key: JWT_SECRET
+adminServiceEnv:
+  SPRING_PROFILES_ACTIVE: dev
+  PORT: "8080"
+  PLATFORM_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_platform
+  MASTER_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_master
+  BROKER_DEFAULT_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_broker_default
+  ADMIN_DATABASE_URL: jdbc:postgresql://postgres:5432/postgres
+  DATABASE_USERNAME: postgres
+  DATABASE_PASSWORD: postgres
+  JWT_SECRET: dev-secret-must-be-at-least-32-bytes-long!
+  REDIS_HOST: redis
+  SPRING_MAIL_HOST: mailhog
+  SPRING_MAIL_PORT: 1025
+  SPRING_MAIL_USERNAME: ""
+  SPRING_MAIL_PASSWORD: ""
+  SPRING_MAIL_FROM: noreply@estateflow.local
+  SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "false"
+  SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "false"
+  SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED: "false"
+  BROKER_OWNER_PORTAL_LOGIN_BASE_URL: http://localhost:3000/broker/login
+
+extraEnv: []
+
+envFrom: []
+
+resources:
+  limits:
+    cpu: "1"
+    memory: 1Gi
+  requests:
+    cpu: "250m"
+    memory: 512Mi
+
+startupProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: http
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 30
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: http
+  initialDelaySeconds: 0
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

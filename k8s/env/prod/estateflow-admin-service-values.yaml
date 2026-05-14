@@ -1,0 +1,41 @@
+# Prod overrides: namespace defaults to **prod-estateflow** via deploy.sh.
+# Deploy:
+#   ./k8s/scripts/deploy.sh prod estateflow-admin-service --set-string image.tag=YOUR_TAG
+#
+# Same keys as docker-compose **estateflow-admin**; replace hosts/secrets for real prod (or use **extraEnv** / **envFrom**).
+
+image:
+  repository: us-central1-docker.pkg.dev/project-cd7b56f0-4325-4b25-88a/estateflow-prod/estateflow-admin-service
+  tag: prod
+  pullPolicy: IfNotPresent
+
+adminServiceEnv:
+  SPRING_PROFILES_ACTIVE: prod
+  PORT: "8080"
+  PLATFORM_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_platform
+  MASTER_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_master
+  BROKER_DEFAULT_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_broker_default
+  ADMIN_DATABASE_URL: jdbc:postgresql://postgres:5432/postgres
+  DATABASE_USERNAME: postgres
+  DATABASE_PASSWORD: postgres
+  JWT_SECRET: dev-secret-must-be-at-least-32-bytes-long!
+  REDIS_HOST: redis
+  SPRING_MAIL_HOST: mailhog
+  SPRING_MAIL_PORT: 1025
+  SPRING_MAIL_USERNAME: ""
+  SPRING_MAIL_PASSWORD: ""
+  SPRING_MAIL_FROM: noreply@estateflow.local
+  SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "false"
+  SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "false"
+  SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED: "false"
+  BROKER_OWNER_PORTAL_LOGIN_BASE_URL: http://localhost:3000/broker/login
+
+replicaCount: 2
+
+resources:
+  limits:
+    cpu: "2"
+    memory: 2Gi
+  requests:
+    cpu: "500m"
+    memory: 1Gi

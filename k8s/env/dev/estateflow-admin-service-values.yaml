@@ -1,0 +1,34 @@
+# Dev overrides: namespace defaults to Terraform **gke_namespace** (e.g. dev-estateflow) via deploy.sh.
+# Deploy (from repo root):
+#   ./k8s/scripts/deploy.sh dev estateflow-admin-service --set-string image.tag=YOUR_TAG
+#
+# Image path matches Jenkins **IMAGE_REPOSITORY**/estateflow-admin-service (see jenkins-jobs/Pipeline_Deploy.groovy).
+
+image:
+  repository: us-central1-docker.pkg.dev/project-cd7b56f0-4325-4b25-88a/estateflow-dev/estateflow-admin-service
+  tag: dev
+  pullPolicy: IfNotPresent
+
+# Same variables as EstateFlow-Service docker-compose **estateflow-admin** (defaults = compose ${VAR:-default}).
+adminServiceEnv:
+  SPRING_PROFILES_ACTIVE: dev
+  PORT: "8080"
+  PLATFORM_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_platform
+  MASTER_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_master
+  BROKER_DEFAULT_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_broker_default
+  ADMIN_DATABASE_URL: jdbc:postgresql://postgres:5432/postgres
+  DATABASE_USERNAME: postgres
+  DATABASE_PASSWORD: postgres
+  JWT_SECRET: dev-secret-must-be-at-least-32-bytes-long!
+  REDIS_HOST: redis
+  SPRING_MAIL_HOST: mailhog
+  SPRING_MAIL_PORT: 1025
+  SPRING_MAIL_USERNAME: ""
+  SPRING_MAIL_PASSWORD: ""
+  SPRING_MAIL_FROM: noreply@estateflow.local
+  SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "false"
+  SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "false"
+  SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED: "false"
+  BROKER_OWNER_PORTAL_LOGIN_BASE_URL: http://localhost:3000/broker/login
+
+replicaCount: 1

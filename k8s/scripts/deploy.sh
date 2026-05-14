@@ -118,7 +118,7 @@ helm_namespace() {
   case "$service" in
     jenkins) jenkins_helm_target_namespace "$env" ;;
     platform-ingress) echo kube-system ;;
-    *) echo "$service" ;;
+    *) jenkins_helm_target_namespace "$env" ;;
   esac
 }
 
