@@ -1,5 +1,8 @@
 // Job DSL runs in a Groovy sandbox: do not use Jenkins.instance / Hudson.instance.getItem here
 // (they require "In-process Script Approval" on every fresh controller).
+// Whole-script approval: init hook jenkins/init.groovy.d/zzz-approvePendingJobDslScripts.groovy auto-approves
+// pending Job DSL scripts during bootstrap. If you still see "script not yet approved for use", approve in
+// Manage Jenkins → In-process Script Approval, rebuild Jenkins-Seed_DSL, or run Jenkins-Security_Approvals.
 // Defaults below apply on first run; update EMAIL_RECIPIENTS, GIT_BRANCH, and cron in the UI as needed.
 
 def job_name = 'Jenkins-Seed_DSL'

@@ -31,7 +31,7 @@ securityContext:
   readOnlyRootFilesystem: false
 
 service:
-  type: ClusterIP
+  type: LoadBalancer
   port: 8080
   agentPort: 50000
   annotations: {}
