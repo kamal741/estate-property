@@ -17,11 +17,15 @@ def git_brnch_deploy = pdp?.getParameterDefinition('GIT_BRANCH_DEPLOY')?.default
 def git_brnch_service = pdp?.getParameterDefinition('GIT_BRANCH_SERVICE')?.defaultValue ?: 'main'
 def git_cred_deploy = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_DEPLOY')?.defaultValue ?: ''
 def git_cred_service = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_SERVICE')?.defaultValue ?: ''
+def gcp_cred_id = pdp?.getParameterDefinition('GCP_CREDENTIALS_ID')?.defaultValue ?: ''
+def jenkins_k8s_sa = pdp?.getParameterDefinition('JENKINS_K8S_SERVICE_ACCOUNT')?.defaultValue ?: 'jenkins'
 
 pipelineJob("$job_name") {
     description("""\
     Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check.
     <b>ENV</b> is not a job parameter; it must be defined on the controller, folder, or agent (e.g. <code>ENV=dev</code>).
+    <b>GCP_AUTH_MODE</b>: <code>workload_identity</code> (default) uses the <b>pod</b> Kubernetes service account + GKE Workload Identity (no JSON key): bind the pod SA to a GCP service account and grant it Artifact Registry + GKE deploy roles; build must run <i>inside</i> the cluster. <code>secret_key</code> uses <b>GCP_CREDENTIALS_ID</b> (Secret file JSON) and <code>gcloud auth activate-service-account</code> (for agents outside the cluster or until WI is set up).
+    <b>JENKINS_K8S_SERVICE_ACCOUNT</b> should match <code>k8s/services/charts/jenkins/values.yaml</code> <code>serviceAccount.name</code> (default <code>jenkins</code>) — that is the K8s identity Workload Identity annotates to your GCP service account.
     Update this job from the seed repo .groovy (${scriptname}) as needed.<br>
     """.stripIndent())
 
@@ -38,6 +42,9 @@ pipelineJob("$job_name") {
         stringParam('GIT_CREDENTIALS_ID_DEPLOY', "$git_cred_deploy", 'Jenkins credential ID for HTTPS checkout of estate-property. Leave empty if the repo is public.')
         stringParam('GIT_CREDENTIALS_ID_SERVICE', "$git_cred_service", 'Jenkins credential ID for HTTPS checkout of pizenith-technologies/EstateFlow. Required for private repos: use Username with password (GitHub username + Personal Access Token); GitHub does not accept account passwords for Git over HTTPS.')
         choiceParam('SERVICE_NAME', ['estateflow-admin-service', 'estateflow-brokerage-agent-service', 'estateflow-client-service'], 'Service name')
+        choiceParam('GCP_AUTH_MODE', ['workload_identity', 'secret_key'], 'workload_identity: no JSON key; pod uses GKE Workload Identity (see job description). secret_key: use GCP_CREDENTIALS_ID JSON file + activate-service-account.')
+        stringParam('GCP_CREDENTIALS_ID', "$gcp_cred_id", 'Required when <b>GCP_AUTH_MODE</b> is <code>secret_key</code>: Jenkins <b>Secret file</b> credential ID (GCP service account JSON). Ignored for <code>workload_identity</code>.')
+        stringParam('JENKINS_K8S_SERVICE_ACCOUNT', "$jenkins_k8s_sa", 'Must match Jenkins Helm <code>serviceAccount.name</code> (chart values); annotate this K8s SA for Workload Identity to your GCP deploy service account.')
     }
 
     properties {
@@ -66,6 +73,20 @@ pipeline {
                     if (!env.ENV?.trim()) {
                         error('ENV is not set. Define ENV in Jenkins (global properties, folder, or agent environment), e.g. dev or prod.')
                     }
+                    def authMode = (params.GCP_AUTH_MODE ?: 'workload_identity').trim()
+                    if (authMode == 'secret_key' && !params.GCP_CREDENTIALS_ID?.trim()) {
+                        error('GCP_AUTH_MODE is secret_key but GCP_CREDENTIALS_ID is empty. Set GCP_CREDENTIALS_ID to a Jenkins Secret file credential ID, or switch GCP_AUTH_MODE to workload_identity.')
+                    }
+                    if (!params.JENKINS_K8S_SERVICE_ACCOUNT?.trim()) {
+                        error('JENKINS_K8S_SERVICE_ACCOUNT is empty. Set it to match k8s/services/charts/jenkins/values.yaml serviceAccount.name (default: jenkins).')
+                    }
+                    if (authMode == 'workload_identity') {
+                        def inCluster = sh(script: 'test -r /var/run/secrets/kubernetes.io/serviceaccount/token && echo yes || echo no', returnStdout: true).trim()
+                        if (inCluster != 'yes') {
+                            error('GCP_AUTH_MODE=workload_identity requires an in-cluster build (Kubernetes service account token not found). Run the job on a GKE-based agent/controller, or set GCP_AUTH_MODE to secret_key and configure GCP_CREDENTIALS_ID.')
+                        }
+                    }
+                    echo "GCP_AUTH_MODE=${authMode}; Jenkins K8s SA (chart): ${params.JENKINS_K8S_SERVICE_ACCOUNT.trim()}"
                 }
             }
         }
@@ -155,15 +176,27 @@ pipeline {
 
         stage('Authenticate GCP') {
             steps {
-                withCredentials([file(credentialsId: 'gcp-sa-key-estateflow', variable: 'GCP_KEY')]) {
-                    sh """
-                    gcloud auth activate-service-account --key-file=${env.GCP_KEY}
-                    gcloud config set project ${env.PROJECT_ID}
-                    gcloud auth configure-docker ${env.REGION}-docker.pkg.dev -q
-                    gcloud container clusters get-credentials ${env.GKE_CLUSTER} \\
-                        --zone ${env.GKE_ZONE} \\
-                        --project ${env.PROJECT_ID}
-                    """
+                script {
+                    def authMode = (params.GCP_AUTH_MODE ?: 'workload_identity').trim()
+                    if (authMode == 'secret_key') {
+                        withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID.trim(), variable: 'GCP_KEY')]) {
+                            sh """
+                            export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+                            gcloud auth activate-service-account --key-file=${env.GCP_KEY}
+                            gcloud config set project ${env.PROJECT_ID} --quiet
+                            gcloud auth configure-docker ${env.REGION}-docker.pkg.dev -q
+                            gcloud container clusters get-credentials ${env.GKE_CLUSTER} \\
+                                --zone ${env.GKE_ZONE} \\
+                                --project ${env.PROJECT_ID}
+                            """
+                        }
+                    } else {
+                        sh """
+                        export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+                        gcloud config set project ${env.PROJECT_ID} --quiet
+                        gcloud auth configure-docker ${env.REGION}-docker.pkg.dev -q
+                        """
+                    }
                 }
             }
         }

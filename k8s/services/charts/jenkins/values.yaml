@@ -16,7 +16,7 @@ imagePullSecrets: []
 serviceAccount:
   create: false
   annotations: {}
-  name: ""
+  name: "jenkins"
 
 podAnnotations: {}
 
