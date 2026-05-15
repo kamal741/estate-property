@@ -3,24 +3,51 @@
 #   ./k8s/scripts/deploy.sh dev estateflow-admin-service --set-string image.tag=YOUR_TAG
 #
 # Image path matches Jenkins **IMAGE_REPOSITORY**/estateflow-admin-service (see jenkins-jobs/Pipeline_Deploy.groovy).
+#
+# Database + Redis: create Secrets in the same namespace (dev-estateflow) before rollout, or use External Secrets / CSI.
+#   kubectl create secret generic estateflow-admin-db -n dev-estateflow \
+#     --from-literal=username=YOUR_DB_USER \
+#     --from-literal=password=YOUR_DB_PASSWORD
+#   kubectl create secret generic estateflow-redis -n dev-estateflow \
+#     --from-literal=host=YOUR_REDIS_HOST \
+#     --from-literal=password=YOUR_REDIS_PASSWORD
+# (Use --from-literal=password= for empty Redis auth.)
+# To use different secret names or keys, edit the valueFrom blocks under adminServiceEnv below.
 
 image:
   repository: us-central1-docker.pkg.dev/project-cd7b56f0-4325-4b25-88a/estateflow-dev/estateflow-admin-service
   tag: dev
   pullPolicy: IfNotPresent
 
-# Same variables as EstateFlow-Service docker-compose **estateflow-admin** (defaults = compose ${VAR:-default}).
 adminServiceEnv:
   SPRING_PROFILES_ACTIVE: dev
   PORT: "8080"
-  PLATFORM_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_platform
-  MASTER_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_master
-  BROKER_DEFAULT_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_broker_default
-  ADMIN_DATABASE_URL: jdbc:postgresql://postgres:5432/postgres
-  DATABASE_USERNAME: postgres
-  DATABASE_PASSWORD: postgres
+  # JDBC hosts must match your Postgres reachability (in-cluster service, Cloud SQL proxy, private IP, etc.).
+  PLATFORM_DATABASE_URL: jdbc:postgresql://34.135.122.108:5432/estateflow_platform
+  MASTER_DATABASE_URL: jdbc:postgresql://34.135.122.108:5432/estateflow_master
+  BROKER_DEFAULT_DATABASE_URL: jdbc:postgresql://34.135.122.108:5432/estateflow_broker_default
+  ADMIN_DATABASE_URL: jdbc:postgresql://34.135.122.108:5432/estateflow
+  DATABASE_USERNAME:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-admin-db
+        key: username
+  DATABASE_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-admin-db
+        key: password
   JWT_SECRET: dev-secret-must-be-at-least-32-bytes-long!
-  REDIS_HOST: redis
+  REDIS_HOST:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-redis
+        key: host
+  REDIS_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-redis
+        key: password
   SPRING_MAIL_HOST: mailhog
   SPRING_MAIL_PORT: 1025
   SPRING_MAIL_USERNAME: ""

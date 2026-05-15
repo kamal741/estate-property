@@ -2,7 +2,13 @@
 # Deploy:
 #   ./k8s/scripts/deploy.sh prod estateflow-admin-service --set-string image.tag=YOUR_TAG
 #
-# Same keys as docker-compose **estateflow-admin**; replace hosts/secrets for real prod (or use **extraEnv** / **envFrom**).
+# Create Secrets in **prod-estateflow** (or sync via External Secrets). Adjust JDBC URLs to your Postgres endpoints.
+#   kubectl create secret generic estateflow-admin-db -n prod-estateflow \
+#     --from-literal=username=YOUR_DB_USER \
+#     --from-literal=password=YOUR_DB_PASSWORD
+#   kubectl create secret generic estateflow-redis -n prod-estateflow \
+#     --from-literal=host=YOUR_REDIS_HOST \
+#     --from-literal=password=YOUR_REDIS_PASSWORD
 
 image:
   repository: us-central1-docker.pkg.dev/project-cd7b56f0-4325-4b25-88a/estateflow-prod/estateflow-admin-service
@@ -16,10 +22,27 @@ adminServiceEnv:
   MASTER_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_master
   BROKER_DEFAULT_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_broker_default
   ADMIN_DATABASE_URL: jdbc:postgresql://postgres:5432/postgres
-  DATABASE_USERNAME: postgres
-  DATABASE_PASSWORD: postgres
+  DATABASE_USERNAME:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-admin-db
+        key: username
+  DATABASE_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-admin-db
+        key: password
   JWT_SECRET: dev-secret-must-be-at-least-32-bytes-long!
-  REDIS_HOST: redis
+  REDIS_HOST:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-redis
+        key: host
+  REDIS_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-redis
+        key: password
   SPRING_MAIL_HOST: mailhog
   SPRING_MAIL_PORT: 1025
   SPRING_MAIL_USERNAME: ""
