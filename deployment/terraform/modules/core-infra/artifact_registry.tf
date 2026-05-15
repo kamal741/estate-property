@@ -28,3 +28,16 @@ resource "google_artifact_registry_repository_iam_member" "cloud_build_writer" {
   role       = "roles/artifactregistry.writer"
   member     = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
 }
+
+# Project-level (same as: gcloud projects add-iam-policy-binding ... --member=serviceAccount:PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/artifactregistry.writer)
+# Broader than repository_iam above; use if Cloud Build must write to other AR repos in the project.
+resource "google_project_iam_member" "cloudbuild_artifactregistry_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
+
+  depends_on = [
+    google_project_service.services["artifactregistry.googleapis.com"],
+    google_project_service.services["cloudbuild.googleapis.com"],
+  ]
+}

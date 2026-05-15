@@ -7,12 +7,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HELM_VERSION=v3.16.4 \
     MAVEN_VERSION=3.9.15 \
     YQ_VERSION=4.53.2 \
-    NODE_MAJOR=16 \
+    NODE_MAJOR=20 \
     USE_GKE_GCLOUD_AUTH_PLUGIN=True \
     PIP_PROGRESS_BAR=off
 
 # -----------------------
-# Base + runtime tools (merged layer)
+# Base + runtime tools
 # -----------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget git jq vim unzip \
@@ -62,6 +62,7 @@ RUN curl -fsSL -o /usr/local/bin/kubectl \
 RUN curl -fsSL https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz \
     | tar xz -C /tmp && \
     mv /tmp/linux-amd64/helm /usr/local/bin/helm && \
+    chmod +x /usr/local/bin/helm && \
     rm -rf /tmp/linux-amd64
 
 # -----------------------
@@ -89,11 +90,22 @@ RUN curl -fsSL https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binar
 ENV PATH="/opt/maven/bin:$PATH"
 
 # -----------------------
-# Flux + Kustomize
+# Flux + Kustomize (FIXED)
 # -----------------------
-RUN curl -s https://fluxcd.io/install.sh | bash && \
-    curl -s https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh \
-    | bash -s /usr/local/bin
+RUN set -eux; \
+    FLUX_VERSION=2.8.7; \
+    KUSTOMIZE_VERSION=5.4.2; \
+    \
+    curl -fsSL https://github.com/fluxcd/flux2/releases/download/v${FLUX_VERSION}/flux_${FLUX_VERSION}_linux_amd64.tar.gz -o /tmp/flux.tar.gz; \
+    tar -xzf /tmp/flux.tar.gz -C /tmp; \
+    mv /tmp/flux /usr/local/bin/flux; \
+    \
+    curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz -o /tmp/kustomize.tar.gz; \
+    tar -xzf /tmp/kustomize.tar.gz -C /tmp; \
+    mv /tmp/kustomize /usr/local/bin/kustomize; \
+    \
+    chmod +x /usr/local/bin/flux /usr/local/bin/kustomize; \
+    rm -rf /tmp/*
 
 # -----------------------
 # PostgreSQL JDBC
