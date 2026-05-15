@@ -8,7 +8,7 @@ resource "google_redis_instance" "redis" {
   memory_size_gb = var.redis_memory
   region         = var.region
 
-  authorized_network = var.enable_private_sql ? google_compute_network.private[0].id : data.google_compute_network.default.id
+  authorized_network = var.enable_private_sql ? google_compute_network.private[0].id : data.google_compute_network.default[0].id
 
   auth_enabled            = true
   transit_encryption_mode = local.redis_transit_encryption
