@@ -22,5 +22,7 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  # Avoids gcloud builds submit crashing (TypeError on NoneType) when Docker prints long URLs / binary-ish log lines.
+  logStreamingOption: STREAM_OFF
 
 timeout: 2700s

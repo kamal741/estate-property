@@ -21,6 +21,7 @@
 #   JENKINS_LOG_TAIL              Lines of logs to print after rollout (default 200).
 #   JENKINS_LOGS_FOLLOW=1         After rollout, stream logs with kubectl -f (Ctrl+C to stop).
 #   CLOUDBUILD_PRINT_LOG_ON_FAIL=0  After a failed gcloud builds submit, skip "gcloud builds log" (default: print logs).
+#   CLOUDBUILD_STREAM_LOGS=1       Pass through Docker build logs to the terminal (default: --suppress-logs to avoid gcloud client crashes on long URLs).
 #   RELEASE                      Helm release name (default jenkins); must match for label app.kubernetes.io/instance.
 #   KUBE_REQUEST_TIMEOUT         Short timeout for kubectl discovery (default 10s).
 #
@@ -229,10 +230,16 @@ build_push_jenkins_cloud() {
   local cb_tmp cb_status build_id
   cb_tmp="$(mktemp)" || die "mktemp failed"
   set +e
-  gcloud builds submit . \
-    --config=jenkins/cloudbuild.yaml \
-    --substitutions="_AR_IMAGE=${full_image}" \
-    --project="$PROJECT_ID" 2>&1 | tee "$cb_tmp"
+  cb_submit_args=(
+    gcloud builds submit .
+    --config=jenkins/cloudbuild.yaml
+    --substitutions="_AR_IMAGE=${full_image}"
+    --project="$PROJECT_ID"
+  )
+  if [[ "${CLOUDBUILD_STREAM_LOGS:-}" != "1" ]]; then
+    cb_submit_args+=(--suppress-logs)
+  fi
+  "${cb_submit_args[@]}" 2>&1 | tee "$cb_tmp"
   cb_status="${PIPESTATUS[0]}"
   set -e
   if [[ "$cb_status" -ne 0 ]]; then
@@ -250,6 +257,9 @@ build_push_jenkins_cloud() {
     die "gcloud builds submit failed (see Cloud Build log above or Console → Cloud Build → History)"
   fi
   rm -f "$cb_tmp"
+  if [[ "${CLOUDBUILD_STREAM_LOGS:-}" != "1" ]]; then
+    echo "==> Cloud Build logs were not streamed (default). Full log: Cloud Console → Cloud Build → History, or CLOUDBUILD_STREAM_LOGS=1 to stream here."
+  fi
   popd >/dev/null || true
 }
 

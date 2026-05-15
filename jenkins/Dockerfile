@@ -10,6 +10,7 @@ ENV KUBECTL_VERSION=v1.33.8
 ENV REDIS_VERSION=7.2.5
 ENV HELM_VERSION=v3.16.4
 ENV MAVEN_VERSION=3.9.15
+ENV YQ_VERSION=4.53.2
 
 # -----------------------
 # Base tools (simplified)
@@ -39,10 +40,10 @@ RUN apt-get update && apt-get install -y nodejs jq vim wget unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------
-# yq (PUBLIC)
+# yq (pinned release; avoids /latest/ redirects and huge signed URLs in build logs)
 # -----------------------
-RUN wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
-    -O /usr/local/bin/yq && chmod +x /usr/local/bin/yq
+RUN curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" \
+    -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq
 
 # -----------------------
 # Python libs
