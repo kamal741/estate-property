@@ -14,6 +14,9 @@ resource "google_sql_database_instance" "postgres" {
 
   deletion_protection = var.db_deletion_protection
 
+  # Private IP requires servicenetworking; when enable_private_sql is false, this resource has count=0 and the dependency is a no-op.
+  depends_on = [google_service_networking_connection.private_vpc_connection]
+
   settings {
     tier = var.db_tier
 

@@ -55,8 +55,8 @@ variable "gke_pods_cidr" {
 
 variable "gke_services_cidr" {
   type        = string
-  description = "Secondary IP range for GKE Services (VPC-native). Only used when enable_private_sql is true."
-  default     = "10.30.0.0/20"
+  description = "Secondary IP range for GKE Services (VPC-native). Only used when enable_private_sql is true. Must not overlap the node subnet, pods range, or the /16 reserved for Private Service Access (servicenetworking); 10.30.0.0/20 often conflicts with an auto-allocated PSA block."
+  default     = "10.40.0.0/20"
 }
 
 variable "gke_secondary_range_pods_name" {

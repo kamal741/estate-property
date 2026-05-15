@@ -10,6 +10,8 @@ resource "google_secret_manager_secret" "db_password" {
   replication {
     auto {}
   }
+
+  depends_on = [google_project_service.services["secretmanager.googleapis.com"]]
 }
 
 resource "google_secret_manager_secret_version" "db_password_version" {
@@ -27,6 +29,8 @@ resource "google_secret_manager_secret" "redis_host" {
   replication {
     auto {}
   }
+
+  depends_on = [google_project_service.services["secretmanager.googleapis.com"]]
 }
 
 resource "google_secret_manager_secret_version" "redis_host_version" {
@@ -44,6 +48,8 @@ resource "google_secret_manager_secret" "redis_auth" {
   replication {
     auto {}
   }
+
+  depends_on = [google_project_service.services["secretmanager.googleapis.com"]]
 }
 
 resource "google_secret_manager_secret_version" "redis_auth_version" {

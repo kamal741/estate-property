@@ -32,6 +32,9 @@ resource "google_service_account_iam_member" "jenkins_workload_identity_user" {
   service_account_id = google_service_account.jenkins[0].name
   role               = "roles/iam.workloadIdentityUser"
   member             = "serviceAccount:${var.project_id}.svc.id.goog[${local.gke_namespace}/${var.jenkins_kubernetes_sa_name}]"
+
+  # WI principal only exists after the GKE cluster creates the project workload identity pool.
+  depends_on = [google_container_cluster.primary]
 }
 
 # Read DB/Redis secrets in Secret Manager (README / operator workflows) without broad project roles.

@@ -114,6 +114,8 @@ gcloud_bootstrap() {
     serviceusage.googleapis.com \
     artifactregistry.googleapis.com \
     cloudbuild.googleapis.com \
+    secretmanager.googleapis.com \
+    compute.googleapis.com \
     --project="$PROJECT_ID"
 
   if gcloud storage buckets describe "gs://${STATE_BUCKET}" --project="$PROJECT_ID" &>/dev/null; then
