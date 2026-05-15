@@ -46,6 +46,16 @@ output "vpc_network_name" {
   value = module.infra.vpc_network_name
 }
 
+output "ingress_static_ip_name" {
+  description = "GKE Ingress static IP resource name (annotation kubernetes.io/ingress.global-static-ip-name)."
+  value       = module.infra.ingress_static_ip_name
+}
+
+output "ingress_static_ip_address" {
+  description = "GKE Ingress static IPv4 (configure DNS to point here)."
+  value       = module.infra.ingress_static_ip_address
+}
+
 output "gke_cluster_name" {
   value = module.infra.gke_cluster_name
 }
@@ -78,6 +88,11 @@ output "jenkins_image_repository" {
   value       = module.infra.jenkins_image_repository
 }
 
+output "jenkins_gcp_service_account_email" {
+  description = "Jenkins dedicated GCP service account (Workload Identity); null if enable_jenkins_workload_identity is false."
+  value       = module.infra.jenkins_gcp_service_account_email
+}
+
 output "jenkins_gke_context" {
   description = "Non-secret GKE context for pipelines (use with a GCP SA key or gcloud auth in the agent)."
   value = {
@@ -90,5 +105,8 @@ output "jenkins_gke_context" {
     gcloud_get_credentials_command    = module.infra.gke_get_credentials_command
     artifact_registry_repository_id   = module.infra.artifact_registry_repository_id
     jenkins_image_repository          = module.infra.jenkins_image_repository
+    ingress_static_ip_name            = module.infra.ingress_static_ip_name
+    ingress_static_ip_address         = module.infra.ingress_static_ip_address
+    jenkins_gcp_service_account_email = module.infra.jenkins_gcp_service_account_email
   }
 }

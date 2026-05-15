@@ -1,17 +1,19 @@
 # Dev overrides: namespace defaults to Terraform **gke_namespace** (e.g. dev-estateflow) via deploy.sh.
 # Deploy (from repo root):
-#   ./k8s/scripts/deploy.sh dev estateflow-admin-service --set-string image.tag=YOUR_TAG
+#   ./k8s/scripts/deploy.sh dev estateflow-admin-service \
+#     --set-string image.tag=YOUR_TAG \
+#     --set-string databaseHost="$(cd deployment/terraform/envs/dev && terraform output -raw db_private_ip)"
 #
 # Image path matches Jenkins **IMAGE_REPOSITORY**/estateflow-admin-service (see jenkins-jobs/Pipeline_Deploy.groovy).
 #
-# Database + Redis: create Secrets in the same namespace (dev-estateflow) before rollout, or use External Secrets / CSI.
-#   kubectl create secret generic estateflow-admin-db -n dev-estateflow \
-#     --from-literal=username=YOUR_DB_USER \
-#     --from-literal=password=YOUR_DB_PASSWORD
-#   kubectl create secret generic estateflow-redis -n dev-estateflow \
-#     --from-literal=host=YOUR_REDIS_HOST \
-#     --from-literal=password=YOUR_REDIS_PASSWORD
-# (Use --from-literal=password= for empty Redis auth.)
+# Database + Redis credentials: Terraform creates Kubernetes Secrets **estateflow-admin-db** and
+# **estateflow-redis** in `dev-estateflow` when `create_app_runtime_secrets` is true (default) in
+# `deployment/terraform/envs/dev`. No manual `kubectl create secret` needed unless you disable that
+# or use External Secrets instead.
+# Override: set `create_app_runtime_secrets = false` in `terraform.tfvars` and manage secrets yourself.
+# If apply fails because a secret already exists, delete it once: `kubectl delete secret estateflow-admin-db -n dev-estateflow` (same for estateflow-redis), then re-apply.
+#
+# Passwords are also in Secret Manager (`dev-db-password`, `dev-redis-auth`, `dev-redis-host`).
 # To use different secret names or keys, edit the valueFrom blocks under adminServiceEnv below.
 
 image:
@@ -19,14 +21,18 @@ image:
   tag: dev
   pullPolicy: IfNotPresent
 
+# Set at deploy time to match Cloud SQL (private IP when enable_private_sql is true).
+databaseHost: ""
+
+databaseNames:
+  platform: estateflow_platform
+  master: estateflow_master
+  broker: estateflow_broker_default
+  admin: estateflow
+
 adminServiceEnv:
   SPRING_PROFILES_ACTIVE: dev
   PORT: "8080"
-  # JDBC hosts must match your Postgres reachability (in-cluster service, Cloud SQL proxy, private IP, etc.).
-  PLATFORM_DATABASE_URL: jdbc:postgresql://34.135.122.108:5432/estateflow_platform
-  MASTER_DATABASE_URL: jdbc:postgresql://34.135.122.108:5432/estateflow_master
-  BROKER_DEFAULT_DATABASE_URL: jdbc:postgresql://34.135.122.108:5432/estateflow_broker_default
-  ADMIN_DATABASE_URL: jdbc:postgresql://34.135.122.108:5432/estateflow
   DATABASE_USERNAME:
     valueFrom:
       secretKeyRef:

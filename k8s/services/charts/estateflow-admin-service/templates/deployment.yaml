@@ -43,7 +43,27 @@ spec:
           env:
             - name: JAVA_OPTS
               value: {{ .Values.javaOpts | quote }}
-{{ include "estateflow-admin-service.adminEnvYaml" . | trim | indent 12 }}
+{{- $dbHost := .Values.databaseHost | default "" }}
+{{- if ne $dbHost "" }}
+            - name: PLATFORM_DATABASE_URL
+              value: {{ printf "jdbc:postgresql://%s:5432/%s" $dbHost .Values.databaseNames.platform | quote }}
+            - name: MASTER_DATABASE_URL
+              value: {{ printf "jdbc:postgresql://%s:5432/%s" $dbHost .Values.databaseNames.master | quote }}
+            - name: BROKER_DEFAULT_DATABASE_URL
+              value: {{ printf "jdbc:postgresql://%s:5432/%s" $dbHost .Values.databaseNames.broker | quote }}
+            - name: ADMIN_DATABASE_URL
+              value: {{ printf "jdbc:postgresql://%s:5432/%s" $dbHost .Values.databaseNames.admin | quote }}
+{{- end }}
+{{- range $k, $v := .Values.adminServiceEnv }}
+{{- if not (and (ne $dbHost "") (or (eq $k "PLATFORM_DATABASE_URL") (eq $k "MASTER_DATABASE_URL") (eq $k "BROKER_DEFAULT_DATABASE_URL") (eq $k "ADMIN_DATABASE_URL"))) }}
+            - name: {{ $k }}
+{{- if kindIs "map" $v }}
+{{ toYaml $v | indent 14 }}
+{{- else }}
+              value: {{ $v | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

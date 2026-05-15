@@ -8,3 +8,11 @@
 
 project_id = "your-gcp-project-id"
 region     = "us-central1"
+
+# Optional: set false if you create estateflow-admin-db / estateflow-redis Secrets with kubectl or External Secrets.
+# create_app_runtime_secrets = true
+
+# Jenkins Workload Identity (default true): GCP SA + IAM + Kubernetes ServiceAccount jenkins + namespace admin RoleBinding.
+# enable_jenkins_workload_identity = false
+# Use one shared account id only in a single env root (both dev+prod in same project need different ids or import one SA).
+# jenkins_gcp_sa_account_id = "jenkins-sa"

@@ -12,8 +12,13 @@
 # Optional: set only if your ingress controller registers an IngressClass:
 # ingressClassName: azure-application-gateway
 
+# Static IP name must match Terraform: `terraform output -raw ingress_static_ip_name` (e.g. prod-estateflow-ingress-ip).
+
 routes:
   - name: jenkins-ui
+    annotations:
+      kubernetes.io/ingress.class: "gce"
+      kubernetes.io/ingress.global-static-ip-name: "prod-estateflow-ingress-ip"
     namespace: prod-estateflow
     host: jenkins.prod.example.com
     serviceName: jenkins
@@ -26,6 +31,9 @@ routes:
 
   # Namespace matches Terraform (prod): kubernetes_namespace_v1.app → prod-estateflow
   - name: spring-boot-api
+    annotations:
+      kubernetes.io/ingress.class: "gce"
+      kubernetes.io/ingress.global-static-ip-name: "prod-estateflow-ingress-ip"
     namespace: prod-estateflow
     host: api.prod.example.com
     serviceName: api

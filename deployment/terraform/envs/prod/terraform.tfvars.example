@@ -7,3 +7,10 @@
 
 project_id = "your-gcp-project-id"
 region     = "us-central1"
+
+# Optional: set false if you create estateflow-admin-db / estateflow-redis Secrets with kubectl or External Secrets.
+# create_app_runtime_secrets = true
+
+# Jenkins Workload Identity — see dev/terraform.tfvars.example comments.
+# enable_jenkins_workload_identity = false
+# jenkins_gcp_sa_account_id = "jenkins-sa"

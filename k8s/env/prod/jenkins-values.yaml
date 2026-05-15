@@ -1,4 +1,5 @@
 # Prod overrides for the Jenkins chart (flat values schema).
+# Kubernetes ServiceAccount **jenkins**: Terraform (**enable_jenkins_workload_identity**, default true) + WI annotation.
 # Namespace: Terraform **gke_namespace** (default **prod-estateflow**); see k8s/scripts/deploy.sh.
 # Migrating from namespace `jenkins`: `helm uninstall jenkins -n jenkins` first if a release name collision occurs.
 # Deploy (from repo root):

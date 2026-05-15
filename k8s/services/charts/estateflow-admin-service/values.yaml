@@ -10,6 +10,17 @@ image:
 
 imagePullSecrets: []
 
+# When set (e.g. Cloud SQL private IP from `terraform output -raw db_private_ip`), JDBC URLs for
+# platform/master/broker/admin DBs are generated from databaseNames below and override any
+# PLATFORM_/MASTER_/BROKER_/ADMIN_DATABASE_URL entries in adminServiceEnv.
+databaseHost: ""
+
+databaseNames:
+  platform: estateflow_platform
+  master: estateflow_master
+  broker: estateflow_broker_default
+  admin: estateflow
+
 serviceAccount:
   create: false
   annotations: {}

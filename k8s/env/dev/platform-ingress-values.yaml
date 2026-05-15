@@ -1,8 +1,9 @@
 # Dev routes for platform-ingress.
 #
-# No custom domain yet: after `helm upgrade`, get the HTTP(S) front IP:
+# No custom domain yet: after `helm upgrade`, confirm the Ingress uses the Terraform static IP:
+#   terraform output -raw ingress_static_ip_address   # from deployment/terraform/envs/dev
 #   kubectl get ingress -n dev-estateflow
-# Use a free DNS name that resolves to that IP, e.g. nip.io — if the ADDRESS is 34.8.92.201, set
+# DNS for the hosts below should point at that address (or use nip.io — if the ADDRESS is 34.8.92.201, set
 #   host: jenkins.34.8.92.201.nip.io
 # (subdomain left of the IP is arbitrary), redeploy this chart, then open that URL in a browser.
 # Alternatively add a line to /etc/hosts: `<ADDRESS> jenkins.dev.local` and set host to `jenkins.dev.local`.
@@ -22,6 +23,9 @@
 
 routes:
   - name: jenkins-ui
+    annotations:
+      kubernetes.io/ingress.class: "gce"
+      kubernetes.io/ingress.global-static-ip-name: "dev-estateflow-ingress-ip"
     # Same namespace as Jenkins Helm release (Terraform app ns: dev-estateflow).
     namespace: dev-estateflow
     # Replace with your real domain, nip.io (see header), or /etc/hosts name once you know the ingress IP.
@@ -36,6 +40,9 @@ routes:
 
   # Namespace matches Terraform (dev/main.tf): kubernetes_namespace_v1.app → dev-estateflow
   - name: spring-boot-api
+    annotations:
+      kubernetes.io/ingress.class: "gce"
+      kubernetes.io/ingress.global-static-ip-name: "dev-estateflow-ingress-ip"
     namespace: dev-estateflow
     host: api.dev.example.com
     serviceName: api

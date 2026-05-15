@@ -18,6 +18,18 @@ output "db_user" {
   value       = google_sql_user.user.name
 }
 
+output "db_password" {
+  description = "Generated PostgreSQL password for db_user. Also stored in Secret Manager (secret_db_password_id). Sensitive."
+  value       = random_password.db.result
+  sensitive   = true
+}
+
+output "redis_auth_string" {
+  description = "Memorystore Redis AUTH string. Also stored in Secret Manager (secret_redis_auth_id). Sensitive."
+  value       = google_redis_instance.redis.auth_string
+  sensitive   = true
+}
+
 output "db_public_ip" {
   description = "Public IPv4 of Cloud SQL when private IP is disabled; empty when using private IP only."
   value       = google_sql_database_instance.postgres.public_ip_address
@@ -56,6 +68,16 @@ output "secret_redis_auth_id" {
 output "vpc_network_name" {
   description = "VPC network name when private SQL is enabled; null otherwise."
   value       = var.enable_private_sql ? google_compute_network.private[0].name : null
+}
+
+output "ingress_static_ip_name" {
+  description = "Name of the reserved global static IP for GKE Ingress, when reserve_ingress_static_ip is true; use as kubernetes.io/ingress.global-static-ip-name."
+  value       = var.reserve_ingress_static_ip ? google_compute_global_address.ingress[0].name : null
+}
+
+output "ingress_static_ip_address" {
+  description = "IPv4 address of the reserved global static IP for GKE Ingress, when reserve_ingress_static_ip is true."
+  value       = var.reserve_ingress_static_ip ? google_compute_global_address.ingress[0].address : null
 }
 
 output "gcp_project_id" {
@@ -107,4 +129,14 @@ output "artifact_registry_region" {
 output "jenkins_image_repository" {
   description = "Helm image.repository value for the custom Jenkins image (no tag): REGION-docker.pkg.dev/PROJECT/REPO/jenkins."
   value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker.repository_id}/jenkins"
+}
+
+output "jenkins_gcp_service_account_email" {
+  description = "Jenkins dedicated GCP service account email when enable_jenkins_gcp_service_account is true; null otherwise. Annotate KSA iam.gke.io/gcp-service-account with this value."
+  value       = var.enable_jenkins_gcp_service_account ? google_service_account.jenkins[0].email : null
+}
+
+output "jenkins_kubernetes_service_account_name" {
+  description = "Kubernetes ServiceAccount name configured for Workload Identity (Helm should use serviceAccount.name equal to this)."
+  value       = var.jenkins_kubernetes_sa_name
 }

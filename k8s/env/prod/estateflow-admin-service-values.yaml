@@ -1,27 +1,29 @@
 # Prod overrides: namespace defaults to **prod-estateflow** via deploy.sh.
 # Deploy:
-#   ./k8s/scripts/deploy.sh prod estateflow-admin-service --set-string image.tag=YOUR_TAG
+#   ./k8s/scripts/deploy.sh prod estateflow-admin-service \
+#     --set-string image.tag=YOUR_TAG \
+#     --set-string databaseHost="$(cd deployment/terraform/envs/prod && terraform output -raw db_private_ip)"
 #
-# Create Secrets in **prod-estateflow** (or sync via External Secrets). Adjust JDBC URLs to your Postgres endpoints.
-#   kubectl create secret generic estateflow-admin-db -n prod-estateflow \
-#     --from-literal=username=YOUR_DB_USER \
-#     --from-literal=password=YOUR_DB_PASSWORD
-#   kubectl create secret generic estateflow-redis -n prod-estateflow \
-#     --from-literal=host=YOUR_REDIS_HOST \
-#     --from-literal=password=YOUR_REDIS_PASSWORD
+# Create Secrets in **prod-estateflow** — by default Terraform creates **estateflow-admin-db** and
+# **estateflow-redis** when `deployment/terraform/envs/prod` applies with `create_app_runtime_secrets = true`.
+# Set `create_app_runtime_secrets = false` in `terraform.tfvars` if you manage these with External Secrets or kubectl only.
 
 image:
   repository: us-central1-docker.pkg.dev/project-cd7b56f0-4325-4b25-88a/estateflow-prod/estateflow-admin-service
   tag: prod
   pullPolicy: IfNotPresent
 
+databaseHost: ""
+
+databaseNames:
+  platform: estateflow_platform
+  master: estateflow_master
+  broker: estateflow_broker_default
+  admin: postgres
+
 adminServiceEnv:
   SPRING_PROFILES_ACTIVE: prod
   PORT: "8080"
-  PLATFORM_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_platform
-  MASTER_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_master
-  BROKER_DEFAULT_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_broker_default
-  ADMIN_DATABASE_URL: jdbc:postgresql://postgres:5432/postgres
   DATABASE_USERNAME:
     valueFrom:
       secretKeyRef:

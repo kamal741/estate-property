@@ -1,5 +1,9 @@
 # Dev overrides for the Jenkins chart (flat values schema).
 #
+# Kubernetes ServiceAccount **jenkins** in the Terraform namespace: created by Terraform when
+# **enable_jenkins_workload_identity** is true (WI annotation → GCP **jenkins_gcp_service_account_email** output).
+# Chart keeps **serviceAccount.create: false** and **name: jenkins** so the pod uses that KSA.
+#
 # Namespace: `k8s/scripts/deploy.sh` installs Jenkins into Terraform **gke_namespace** (default **dev-estateflow**),
 # same as app workloads. Override with **NAMESPACE** or **JENKINS_HELM_NAMESPACE** if needed.
 # Migrating from an older `jenkins` namespace: `helm uninstall jenkins -n jenkins` (and remove the PVC if you accept data loss), then deploy again.

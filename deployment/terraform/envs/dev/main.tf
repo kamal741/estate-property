@@ -11,13 +11,17 @@ module "infra" {
   redis_memory = 1
 
   db_deletion_protection                 = false
-  enable_private_sql                     = false
+  enable_private_sql                     = true
   bucket_force_destroy                   = true
   bucket_noncurrent_version_max_age_days = 30
 
   gke_machine_type        = "e2-standard-2"
   gke_node_count          = 1
   gke_deletion_protection = false
+
+  enable_jenkins_gcp_service_account = var.enable_jenkins_workload_identity
+  jenkins_gcp_sa_account_id          = var.jenkins_gcp_sa_account_id
+  jenkins_kubernetes_sa_name         = var.jenkins_kubernetes_sa_name
 }
 
 resource "kubernetes_namespace_v1" "app" {
@@ -30,4 +34,94 @@ resource "kubernetes_namespace_v1" "app" {
       managed_by = "terraform"
     }
   }
+}
+
+# App credentials for estateflow-admin-service Helm chart (secretKeyRef: estateflow-admin-db, estateflow-redis).
+resource "kubernetes_secret_v1" "estateflow_admin_db" {
+  count = var.create_app_runtime_secrets ? 1 : 0
+
+  metadata {
+    name      = "estateflow-admin-db"
+    namespace = kubernetes_namespace_v1.app.metadata[0].name
+    labels = {
+      env        = "dev"
+      app        = "estateflow"
+      managed_by = "terraform"
+    }
+  }
+
+  type = "Opaque"
+
+  data = {
+    username = base64encode(module.infra.db_user)
+    password = base64encode(module.infra.db_password)
+  }
+
+  depends_on = [kubernetes_namespace_v1.app]
+}
+
+resource "kubernetes_secret_v1" "estateflow_redis" {
+  count = var.create_app_runtime_secrets ? 1 : 0
+
+  metadata {
+    name      = "estateflow-redis"
+    namespace = kubernetes_namespace_v1.app.metadata[0].name
+    labels = {
+      env        = "dev"
+      app        = "estateflow"
+      managed_by = "terraform"
+    }
+  }
+
+  type = "Opaque"
+
+  data = {
+    host     = base64encode(module.infra.redis_host)
+    password = base64encode(module.infra.redis_auth_string)
+  }
+
+  depends_on = [kubernetes_namespace_v1.app]
+}
+
+# Jenkins: KSA + Workload Identity annotation (GCP SA + IAM live in module.infra when enable_jenkins_workload_identity is true).
+resource "kubernetes_service_account_v1" "jenkins" {
+  count = var.enable_jenkins_workload_identity ? 1 : 0
+
+  metadata {
+    name      = var.jenkins_kubernetes_sa_name
+    namespace = kubernetes_namespace_v1.app.metadata[0].name
+    labels = {
+      env        = "dev"
+      app        = "jenkins"
+      managed_by = "terraform"
+    }
+    annotations = {
+      "iam.gke.io/gcp-service-account" = module.infra.jenkins_gcp_service_account_email
+    }
+  }
+
+  depends_on = [kubernetes_namespace_v1.app]
+}
+
+resource "kubernetes_role_binding_v1" "jenkins_namespace_admin" {
+  count = var.enable_jenkins_workload_identity && var.jenkins_grant_namespace_admin ? 1 : 0
+
+  metadata {
+    name      = "jenkins-admin-binding"
+    namespace = kubernetes_namespace_v1.app.metadata[0].name
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = "admin"
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = var.jenkins_kubernetes_sa_name
+    namespace = kubernetes_namespace_v1.app.metadata[0].name
+  }
+
+  depends_on = [kubernetes_service_account_v1.jenkins]
 }

@@ -37,8 +37,44 @@ variable "db_deletion_protection" {
 
 variable "enable_private_sql" {
   type        = bool
-  description = "When true, creates a VPC + private service connection and Cloud SQL uses private IP only (no public IPv4)."
+  description = "When true, creates a VPC + private service connection and Cloud SQL uses private IP only (no public IPv4). GKE is placed VPC-natively on a dedicated subnet in that network; Memorystore uses the same VPC."
   default     = false
+}
+
+variable "gke_subnet_cidr" {
+  type        = string
+  description = "Primary IPv4 CIDR for the regional GKE subnet (node IPs). Only used when enable_private_sql is true. Must not overlap secondary ranges or the PSA allocation."
+  default     = "10.10.0.0/20"
+}
+
+variable "gke_pods_cidr" {
+  type        = string
+  description = "Secondary IP range for GKE Pods (VPC-native). Only used when enable_private_sql is true."
+  default     = "10.20.0.0/16"
+}
+
+variable "gke_services_cidr" {
+  type        = string
+  description = "Secondary IP range for GKE Services (VPC-native). Only used when enable_private_sql is true."
+  default     = "10.30.0.0/20"
+}
+
+variable "gke_secondary_range_pods_name" {
+  type        = string
+  description = "Name of the secondary range for Pods on the GKE subnet (must match ip_allocation_policy.cluster_secondary_range_name)."
+  default     = "pods-range"
+}
+
+variable "gke_secondary_range_services_name" {
+  type        = string
+  description = "Name of the secondary range for Services on the GKE subnet (must match ip_allocation_policy.services_secondary_range_name)."
+  default     = "services-range"
+}
+
+variable "reserve_ingress_static_ip" {
+  type        = bool
+  description = "When true, reserves a global static IPv4 for GKE Ingress (kubernetes.io/ingress.global-static-ip-name). Incurrs a small charge while reserved."
+  default     = true
 }
 
 variable "redis_tier" {
@@ -130,6 +166,35 @@ variable "gke_namespace" {
   type        = string
   description = "Kubernetes namespace name. Defaults to <env>-estateflow when null."
   default     = null
+}
+
+# ---------------------------------------------------------------------------
+# Jenkins (GCP SA + Workload Identity binding on GCP side)
+# ---------------------------------------------------------------------------
+variable "enable_jenkins_gcp_service_account" {
+  type        = bool
+  description = "When true, creates a GCP service account for Jenkins with AR/GKE/Storage/Cloud Build project roles, default-compute SA user, and WI principal for <gke_namespace>/<jenkins_kubernetes_sa_name>."
+  default     = false
+}
+
+variable "jenkins_gcp_sa_account_id" {
+  type        = string
+  description = "GCP service account account_id (prefix of email). If null, uses jenkins-sa-<env> so dev and prod stacks can coexist in one project without clashing."
+  default     = null
+  nullable    = true
+}
+
+variable "jenkins_gcp_sa_display_name" {
+  type        = string
+  description = "Optional display name for the Jenkins GCP service account."
+  default     = null
+  nullable    = true
+}
+
+variable "jenkins_kubernetes_sa_name" {
+  type        = string
+  description = "Kubernetes ServiceAccount name that Jenkins uses (Helm chart default: jenkins). Must match Workload Identity binding member."
+  default     = "jenkins"
 }
 
 # ---------------------------------------------------------------------------
