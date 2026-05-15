@@ -24,6 +24,8 @@ show_usage() {
 
   Helm: chart k8s/services/charts/<service>, values k8s/env/<env>/<service>-values.yaml.
     Anything after <service> is passed through to `helm upgrade` (e.g. --set-string image.tag=v1.0.0 for Jenkins).
+    By default Helm does **not** pass --create-namespace (Terraform creates gke_namespace; CI SAs often lack cluster-scoped
+    namespace create). Set HELM_CREATE_NAMESPACE=1 to add --create-namespace for greenfield installs.
   kubectl: default path k8s/env/<env>/manifests (kustomization.yaml → apply -k, else apply -f)
   GKE: SYNC_GKE_KUBECONFIG=1 → terraform gke_get_credentials_command from deployment/terraform/envs/<env>/
 
@@ -170,13 +172,19 @@ helm_upgrade() {
     fi
   fi
 
+  local helm_ns_create=()
+  if [[ "${HELM_CREATE_NAMESPACE:-}" == "1" ]]; then
+    helm_ns_create=(--create-namespace)
+    echo "    (HELM_CREATE_NAMESPACE=1: helm --create-namespace)"
+  fi
+
   echo "==> helm upgrade --install release=$release namespace=$ns (env=$env service=$service)"
   echo "    $chart"
   echo "    -f $values"
   echo
   helm upgrade --install "$release" "$chart" \
     --namespace "$ns" \
-    --create-namespace \
+    "${helm_ns_create[@]}" \
     --values "$values" \
     "${jenkins_image_overrides[@]}" \
     "${helm_upgrade_extra[@]}" \
