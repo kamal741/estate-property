@@ -11,6 +11,8 @@
 # Command combinations (repo root; replace bucket/region if you use non-defaults):
 #   ./deployment/scripts/terraform-deploy.sh dev
 #   ./deployment/scripts/terraform-deploy.sh dev my-unique-state-bucket us-central1
+#   Default state bucket: <project_id>-tfstate-<env> (GCS names are global; avoids estateflow-bucket-<env> collisions).
+#   If you already use legacy gs://estateflow-bucket-<env>, pass it as arg 2 or set TERRAFORM_STATE_BUCKET.
 #   SKIP_TERRAFORM=1 ./deployment/scripts/terraform-deploy.sh dev
 #       # init + kube sync only (no apply); use after manual plan/apply elsewhere
 #   SKIP_KUBECONFIG_SYNC=1 ./deployment/scripts/terraform-deploy.sh dev
@@ -98,7 +100,8 @@ REGION="$(tfvar_get region)" || die "could not read region from $TFVARS"
 
 STATE_BUCKET="${TERRAFORM_STATE_BUCKET:-${2:-}}"
 STATE_LOCATION="${GCS_STATE_BUCKET_LOCATION:-${3:-}}"
-[[ -n "$STATE_BUCKET" ]] || STATE_BUCKET="estateflow-bucket-${ENV}"
+# GCS bucket names are global; project_id in the default avoids 409 on create when a short name is taken elsewhere.
+[[ -n "$STATE_BUCKET" ]] || STATE_BUCKET="${PROJECT_ID}-tfstate-${ENV}"
 [[ -n "$STATE_LOCATION" ]] || STATE_LOCATION="$REGION"
 
 gcloud_bootstrap() {
@@ -114,13 +117,17 @@ gcloud_bootstrap() {
     --project="$PROJECT_ID"
 
   if gcloud storage buckets describe "gs://${STATE_BUCKET}" --project="$PROJECT_ID" &>/dev/null; then
-    echo "==> GCS state bucket already exists: gs://${STATE_BUCKET}"
+    echo "==> GCS state bucket already exists in project: gs://${STATE_BUCKET}"
   else
     echo "==> gcloud storage buckets create gs://${STATE_BUCKET}"
-    gcloud storage buckets create "gs://${STATE_BUCKET}" \
+    if ! gcloud storage buckets create "gs://${STATE_BUCKET}" \
       --project="$PROJECT_ID" \
       --location="$STATE_LOCATION" \
-      --uniform-bucket-level-access
+      --uniform-bucket-level-access; then
+      echo "error: could not create gs://${STATE_BUCKET} (name may be in use globally, or IAM/org policy blocked create)." >&2
+      echo "  Try another name: pass arg 2 or set TERRAFORM_STATE_BUCKET (suggested: ${PROJECT_ID}-tfstate-${ENV})." >&2
+      exit 1
+    fi
   fi
 }
 

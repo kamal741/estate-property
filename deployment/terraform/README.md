@@ -22,7 +22,7 @@ This layout uses **one state per environment** under `deployment/terraform/envs/
 3. **Remote state (GCS)** — `envs/*/backend.tf` only sets the **`prefix`** (`dev` / `prod`). The **bucket name** is supplied at **`terraform init`** (see **`deployment/scripts/deploy-platform.sh`**), which by default:
 
    - Enables **`cloudresourcemanager.googleapis.com`** and **`serviceusage.googleapis.com`** (idempotent).
-   - Creates **`gs://estateflow-bucket-<env>`** in **`GCS_STATE_BUCKET_LOCATION`** if unset (defaults to **`region`** from `terraform.tfvars`).
+   - Creates **`gs://<project_id>-tfstate-<env>`** in **`GCS_STATE_BUCKET_LOCATION`** if unset (defaults to **`region`** from `terraform.tfvars`). Names include **`project_id`** because GCS bucket names are **global**.
    - Runs **`terraform init -backend-config="bucket=..."`**.
 
    **Second GCS bucket:** Terraform does **not** create `<env>-estateflow-bucket` by default (only the remote **state** bucket above). To add a dedicated application bucket again, set **`create_application_gcs_bucket = true`** on **`module "infra"`** in that env’s **`main.tf`**.
@@ -30,12 +30,12 @@ This layout uses **one state per environment** under `deployment/terraform/envs/
    Override defaults:
 
    ```bash
-   ./deployment/scripts/deploy-platform.sh dev                                  # bucket estateflow-bucket-dev, location = region in tfvars
+   ./deployment/scripts/deploy-platform.sh dev                                  # bucket <project_id>-tfstate-dev, location = region in tfvars
    ./deployment/scripts/deploy-platform.sh dev my-project-tf-state us-east1     # explicit bucket + GCS location
    TERRAFORM_STATE_BUCKET=my-bucket GCS_STATE_BUCKET_LOCATION=us-central1 ./deployment/scripts/deploy-platform.sh dev
    ```
 
-   GCS bucket names are **global**; if `estateflow-bucket-dev` is taken, pass a unique name as the second argument or set **`TERRAFORM_STATE_BUCKET`**.
+   If you still use a **legacy** state bucket (**`estateflow-bucket-<env>`**), pass it as the second argument or set **`TERRAFORM_STATE_BUCKET`** so **`terraform init`** matches existing state.
 
    Grant your principal **`roles/storage.objectAdmin`** on that bucket (or project-level if your org requires it). See troubleshooting below if **`getIamPolicy`** is denied.
 

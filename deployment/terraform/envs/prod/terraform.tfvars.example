@@ -3,6 +3,7 @@
 #
 # region — used for regional GCP resources and as the default GCS location for the
 #          Terraform state bucket when deploy-platform.sh creates it.
+#          Default bucket name is <project_id>-tfstate-<env> (see terraform-deploy.sh).
 #          (No separate app bucket unless create_application_gcs_bucket = true on module "infra".)
 
 project_id = "your-gcp-project-id"
