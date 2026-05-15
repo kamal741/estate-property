@@ -16,7 +16,7 @@ ENV MAVEN_VERSION=3.9.15
 # -----------------------
 RUN apt-get update && apt-get install -y \
     curl wget git jq vim lsof strace unzip \
-    gnupg nodejs python3-pip python3-venv postgresql-client \
+    gnupg python3-pip python3-venv postgresql-client \
     make gcc g++ build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -31,15 +31,7 @@ RUN mkdir -p /etc/apt/keyrings \
   && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
      > /etc/apt/sources.list.d/nodesource.list
 
-# -----------------------
-# Adoptium repo
-# -----------------------
-RUN curl -sSL https://packages.adoptium.net/artifactory/api/gpg/key/public \
-    | tee /etc/apt/keyrings/adoptium.asc \
-  && echo "deb [signed-by=/etc/apt/keyrings/adoptium.asc] https://packages.adoptium.net/artifactory/deb \
-     $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" \
-     > /etc/apt/sources.list.d/adoptium.list
-
+# JDK comes from the jenkins/jenkins:*-jdk21 base image. (Former Adoptium apt repo was unused and broke Cloud Build log streaming.)
 # -----------------------
 # Install tools
 # -----------------------
