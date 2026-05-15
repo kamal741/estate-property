@@ -206,3 +206,19 @@ variable "artifact_registry_repository_id" {
   default     = null
   nullable    = true
 }
+
+# ---------------------------------------------------------------------------
+# Cloud Build (default staging bucket IAM)
+# ---------------------------------------------------------------------------
+variable "grant_default_compute_sa_cloudbuild_staging_iam" {
+  type        = bool
+  description = "When true, grants roles/storage.objectUser on the Cloud Build default staging bucket to the default Compute Engine SA (needed for gcloud builds submit from Cloud Shell when that identity reads staged sources). Set false if the bucket does not exist yet (Terraform apply will 404); create it with any Cloud Build run, then re-enable."
+  default     = true
+}
+
+variable "cloudbuild_staging_bucket_name" {
+  type        = string
+  description = "GCS bucket name for Cloud Build source staging (default: <project_id>_cloudbuild). Override if your org uses a different default bucket name."
+  default     = null
+  nullable    = true
+}

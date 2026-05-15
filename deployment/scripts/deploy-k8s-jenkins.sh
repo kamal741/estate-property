@@ -20,6 +20,7 @@
 #   JENKINS_ROLLOUT_TIMEOUT       kubectl rollout timeout (default 600s).
 #   JENKINS_LOG_TAIL              Lines of logs to print after rollout (default 200).
 #   JENKINS_LOGS_FOLLOW=1         After rollout, stream logs with kubectl -f (Ctrl+C to stop).
+#   CLOUDBUILD_PRINT_LOG_ON_FAIL=0  After a failed gcloud builds submit, skip "gcloud builds log" (default: print logs).
 #   RELEASE                      Helm release name (default jenkins); must match for label app.kubernetes.io/instance.
 #   KUBE_REQUEST_TIMEOUT         Short timeout for kubectl discovery (default 10s).
 #
@@ -225,10 +226,30 @@ build_push_jenkins_cloud() {
 
   echo "==> BUILD_PUSH_JENKINS_IMAGE=1 (gcloud builds submit / Cloud Build) → $full_image"
   pushd "$REPO_ROOT" >/dev/null || exit 1
+  local cb_tmp cb_status build_id
+  cb_tmp="$(mktemp)" || die "mktemp failed"
+  set +e
   gcloud builds submit . \
     --config=jenkins/cloudbuild.yaml \
     --substitutions="_AR_IMAGE=${full_image}" \
-    --project="$PROJECT_ID"
+    --project="$PROJECT_ID" 2>&1 | tee "$cb_tmp"
+  cb_status="${PIPESTATUS[0]}"
+  set -e
+  if [[ "$cb_status" -ne 0 ]]; then
+    build_id="$(grep -oE 'locations/global/builds/[a-f0-9-]{36}' "$cb_tmp" 2>/dev/null | head -1 | awk -F/ '{print $NF}')"
+    rm -f "$cb_tmp"
+    popd >/dev/null || true
+    if [[ "${CLOUDBUILD_PRINT_LOG_ON_FAIL:-1}" != "0" && -n "$build_id" ]]; then
+      echo "==> Cloud Build failed; streaming log for build_id=$build_id (CLOUDBUILD_PRINT_LOG_ON_FAIL=0 to skip)" >&2
+      gcloud builds log "$build_id" --project="$PROJECT_ID" >&2 || true
+    else
+      echo "error: Cloud Build failed (exit $cb_status). Recent builds:" >&2
+      gcloud builds list --project="$PROJECT_ID" --limit=5 --format='table(id,status,createTime)' >&2 || true
+      echo "  gcloud builds log BUILD_ID --project=$PROJECT_ID" >&2
+    fi
+    die "gcloud builds submit failed (see Cloud Build log above or Console → Cloud Build → History)"
+  fi
+  rm -f "$cb_tmp"
   popd >/dev/null || true
 }
 
