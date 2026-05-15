@@ -21,7 +21,7 @@
 #   JENKINS_LOG_TAIL              Lines of logs to print after rollout (default 200).
 #   JENKINS_LOGS_FOLLOW=1         After rollout, stream logs with kubectl -f (Ctrl+C to stop).
 #   CLOUDBUILD_PRINT_LOG_ON_FAIL=0  After a failed gcloud builds submit, skip "gcloud builds log" (default: print logs).
-#   CLOUDBUILD_STREAM_LOGS=1       Stream Docker build logs (default: off + --suppress-logs; gcloud can crash on Unicode e.g. pip progress bars).
+#   CLOUDBUILD_STREAM_LOGS=1       Synchronous submit + streamed Docker logs (can crash older gcloud clients).
 #   RELEASE                      Helm release name (default jenkins); must match for label app.kubernetes.io/instance.
 #   KUBE_REQUEST_TIMEOUT         Short timeout for kubectl discovery (default 10s).
 #
@@ -227,8 +227,9 @@ build_push_jenkins_cloud() {
 
   echo "==> BUILD_PUSH_JENKINS_IMAGE=1 (gcloud builds submit / Cloud Build) → $full_image"
   pushd "$REPO_ROOT" >/dev/null || exit 1
-  local cb_tmp cb_status build_id
+  local cb_tmp cb_status build_id st max_wait step spent
   cb_tmp="$(mktemp)" || die "mktemp failed"
+  build_id=""
   set +e
   cb_submit_args=(
     gcloud builds submit .
@@ -236,22 +237,63 @@ build_push_jenkins_cloud() {
     --substitutions="_AR_IMAGE=${full_image}"
     --project="$PROJECT_ID"
   )
-  if [[ "${CLOUDBUILD_STREAM_LOGS:-}" != "1" ]]; then
-    # --suppress-logs: do not stream Docker logs (avoids gcloud client TypeError on Unicode / long lines).
-    cb_submit_args+=(--suppress-logs)
-    "${cb_submit_args[@]}" >"$cb_tmp" 2>&1
-    cb_status=$?
-  else
+  if [[ "${CLOUDBUILD_STREAM_LOGS:-}" == "1" ]]; then
     "${cb_submit_args[@]}" 2>&1 | tee "$cb_tmp"
     cb_status="${PIPESTATUS[0]}"
+  else
+    # Default: --async then poll describe — local gcloud never ingests Docker step logs (avoids TypeError on wget/Unicode lines).
+    cb_submit_args+=(--suppress-logs --async)
+    "${cb_submit_args[@]}" >"$cb_tmp" 2>&1
+    cb_status=$?
+    if [[ "$cb_status" -eq 0 ]]; then
+      build_id="$(grep -oE 'locations/global/builds/[a-f0-9-]{36}' "$cb_tmp" 2>/dev/null | head -1 | awk -F/ '{print $NF}')"
+      if [[ -z "$build_id" ]]; then
+        echo "error: could not parse Cloud Build id from gcloud output:" >&2
+        tail -n 50 "$cb_tmp" >&2
+        cb_status=1
+      else
+        rm -f "$cb_tmp"
+        echo "==> Cloud Build queued (id=$build_id). Waiting for completion (no Docker log stream here; use Console for live log)..." >&2
+        max_wait=3600
+        step=15
+        spent=0
+        st=""
+        while [[ "$spent" -lt "$max_wait" ]]; do
+          st="$(gcloud builds describe "$build_id" --project="$PROJECT_ID" --format='value(status)' 2>/dev/null || true)"
+          case "$st" in
+            SUCCESS)
+              cb_status=0
+              break
+              ;;
+            FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+              cb_status=1
+              break
+              ;;
+            *)
+              sleep "$step"
+              spent=$((spent + step))
+              if [[ "$spent" == "$step" ]] || (( spent % 120 == 0 )); then
+                echo "==>   build $build_id status=${st:-UNKNOWN} (${spent}s / ${max_wait}s)" >&2
+              fi
+              ;;
+          esac
+        done
+        if [[ "$spent" -ge "$max_wait" && "$st" != "SUCCESS" ]]; then
+          echo "error: timed out waiting for Cloud Build $build_id (last status=${st:-unknown})" >&2
+          cb_status=1
+        fi
+      fi
+    fi
   fi
   set -e
   if [[ "$cb_status" -ne 0 ]]; then
-    build_id="$(grep -oE 'locations/global/builds/[a-f0-9-]{36}' "$cb_tmp" 2>/dev/null | head -1 | awk -F/ '{print $NF}')"
+    if [[ -z "$build_id" && -f "$cb_tmp" ]]; then
+      build_id="$(grep -oE 'locations/global/builds/[a-f0-9-]{36}' "$cb_tmp" 2>/dev/null | head -1 | awk -F/ '{print $NF}')"
+    fi
     rm -f "$cb_tmp"
     popd >/dev/null || true
     if [[ "${CLOUDBUILD_PRINT_LOG_ON_FAIL:-1}" != "0" && -n "$build_id" ]]; then
-      echo "==> Cloud Build failed; streaming log for build_id=$build_id (CLOUDBUILD_PRINT_LOG_ON_FAIL=0 to skip)" >&2
+      echo "==> Cloud Build failed; fetching log for build_id=$build_id (CLOUDBUILD_PRINT_LOG_ON_FAIL=0 to skip)" >&2
       gcloud builds log "$build_id" --project="$PROJECT_ID" >&2 || true
     else
       echo "error: Cloud Build failed (exit $cb_status). Recent builds:" >&2
@@ -262,7 +304,7 @@ build_push_jenkins_cloud() {
   fi
   rm -f "$cb_tmp"
   if [[ "${CLOUDBUILD_STREAM_LOGS:-}" != "1" ]]; then
-    echo "==> Cloud Build logs were not streamed (default). Full log: Cloud Console → Cloud Build → History, or CLOUDBUILD_STREAM_LOGS=1 to stream here."
+    echo "==> Cloud Build finished.${build_id:+ Build id: $build_id.} Logs: Cloud Console → Cloud Build → History. (CLOUDBUILD_STREAM_LOGS=1 streams here but may crash gcloud.)" >&2
   fi
   popd >/dev/null || true
 }

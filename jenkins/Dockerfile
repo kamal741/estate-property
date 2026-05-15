@@ -66,16 +66,16 @@ RUN echo "ServerAliveInterval 60" >> /etc/ssh/ssh_config && \
 # -----------------------
 ENV POSTGRES_VERSION=42.7.3
 
-RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar \
-    -O /usr/local/lib/postgresql.jar
+RUN curl -fsSL "https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar" \
+    -o /usr/local/lib/postgresql.jar
 
 ENV CLASSPATH="/usr/local/lib/postgresql.jar"
 
 # -----------------------
 # kubectl (PUBLIC)
 # -----------------------
-RUN curl -L -o /usr/local/bin/kubectl \
-    https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl && \
+RUN curl -fsSL -o /usr/local/bin/kubectl \
+    "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
     chmod +x /usr/local/bin/kubectl
 
 # -----------------------
@@ -131,9 +131,9 @@ RUN curl -s https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/h
 # Redis CLI
 # -----------------------
 RUN cd /tmp && \
-    curl -L -o redis.tar.gz https://download.redis.io/releases/redis-${REDIS_VERSION}.tar.gz && \
-    tar xzf redis.tar.gz && \
-    make -j2 -C redis-${REDIS_VERSION} && \
+    curl -fsSL -o "redis-${REDIS_VERSION}.tar.gz" "https://download.redis.io/releases/redis-${REDIS_VERSION}.tar.gz" && \
+    tar xzf "redis-${REDIS_VERSION}.tar.gz" && \
+    make -s -j2 -C "redis-${REDIS_VERSION}" && \
     cp redis-${REDIS_VERSION}/src/redis-cli /usr/local/bin && \
     rm -rf /tmp/redis*
 
