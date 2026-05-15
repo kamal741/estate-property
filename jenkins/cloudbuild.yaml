@@ -8,6 +8,7 @@ steps:
   - name: "gcr.io/cloud-builders/docker"
     args:
       - "build"
+      - "--progress=plain"
       - "-f"
       - "jenkins/Dockerfile"
       - "-t"

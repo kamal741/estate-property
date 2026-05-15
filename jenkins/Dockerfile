@@ -46,11 +46,12 @@ RUN curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}
     -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq
 
 # -----------------------
-# Python libs
+# Python libs (quiet pip: Unicode progress bars break some gcloud builds submit clients)
 # -----------------------
+ENV PIP_PROGRESS_BAR=off
 RUN python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --upgrade pip && \
-    /opt/venv/bin/pip install requests pandas paramiko redis
+    /opt/venv/bin/pip install -q --upgrade pip && \
+    /opt/venv/bin/pip install -q requests pandas paramiko redis
 
 ENV PATH="/opt/venv/bin:$PATH"
 
