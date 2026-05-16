@@ -1,0 +1,45 @@
+image:
+  tag: prod
+  pullPolicy: IfNotPresent
+
+databaseHost: ""
+
+databaseNames:
+  platform: estateflow_platform
+  master: estateflow_master
+  broker: estateflow_broker_default
+
+serviceEnv:
+  SPRING_PROFILES_ACTIVE: prod
+  PORT: "8081"
+  DATABASE_USERNAME:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-admin-db
+        key: username
+  DATABASE_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-admin-db
+        key: password
+  JWT_SECRET: dev-secret-must-be-at-least-32-bytes-long!
+  REDIS_HOST:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-redis
+        key: host
+  REDIS_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: estateflow-redis
+        key: password
+
+replicaCount: 2
+
+resources:
+  limits:
+    cpu: "2"
+    memory: 2Gi
+  requests:
+    cpu: "500m"
+    memory: 1Gi

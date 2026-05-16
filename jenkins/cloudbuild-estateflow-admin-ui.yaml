@@ -1,0 +1,24 @@
+# Cloud Build for EstateFlow-Admin-UI (Vite + nginx). Submit with context = EstateFlow-Admin-UI repo root.
+#
+#   gcloud builds submit . \
+#     --config=jenkins/cloudbuild-estateflow-admin-ui.yaml \
+#     --substitutions=_AR_IMAGE=REGION-docker.pkg.dev/PROJECT/REPO/estateflow-admin-ui:TAG
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_AR_IMAGE}"
+      - "."
+
+images:
+  - "${_AR_IMAGE}"
+
+substitutions:
+  _AR_IMAGE: "REPLACE_ME"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 3600s

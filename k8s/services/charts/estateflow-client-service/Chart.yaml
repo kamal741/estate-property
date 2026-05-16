@@ -1,0 +1,6 @@
+apiVersion: v2
+name: estateflow-client-service
+description: EstateFlow client & properties API (Spring WebFlux), image from Dockerfile.estateflow-client-service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

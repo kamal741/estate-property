@@ -11,6 +11,12 @@ def DEPLOYABLE_SERVICES = [
     'estateflow-admin-service',
     'estateflow-brokerage-agent-service',
     'estateflow-client-service',
+    'estateflow-admin-ui',
+]
+def JDBC_SERVICES = [
+    'estateflow-admin-service',
+    'estateflow-brokerage-agent-service',
+    'estateflow-client-service',
 ]
 def all_services_csv = DEPLOYABLE_SERVICES.join(',')
 
@@ -27,6 +33,10 @@ def git_cred_deploy = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_DEPLOY')?.
 def git_cred_service = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_SERVICE')?.defaultValue ?: ''
 def gcp_cred_id = pdp?.getParameterDefinition('GCP_CREDENTIALS_ID')?.defaultValue ?: ''
 def jenkins_k8s_sa = pdp?.getParameterDefinition('JENKINS_K8S_SERVICE_ACCOUNT')?.defaultValue ?: 'jenkins'
+def deploy_platform_ingress_default = pdp?.getParameterDefinition('DEPLOY_PLATFORM_INGRESS')?.defaultValue
+if (deploy_platform_ingress_default == null) {
+    deploy_platform_ingress_default = true
+}
 def service_names_default = pdp?.getParameterDefinition('SERVICE_NAMES')?.defaultValue
     ?: pdp?.getParameterDefinition('SERVICE_NAME')?.defaultValue
     ?: DEPLOYABLE_SERVICES[0]
@@ -50,7 +60,7 @@ if (pdp?.getParameterDefinition('DEPLOY_ESTATEFLOW_ADMIN_SERVICE') != null) {
 pipelineJob("$job_name") {
     // HTML requires OWASP Safe HTML formatter: antisamy-markup-formatter in jenkins/plugins.txt + init 02-configureMarkupFormatter.groovy.
     description("""\
-    Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check. Select one or more services with <b>SERVICE_NAMES</b> (multi-select). Add services in <code>DEPLOYABLE_SERVICES</code> in this job's .groovy file.
+    Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check, then <b>platform-ingress</b> (GCE routes). Select services with <b>SERVICE_NAMES</b> (multi-select). Add services in <code>DEPLOYABLE_SERVICES</code> in this job's .groovy file.
     <b>ENV</b> is not a job parameter; it must be defined on the controller, folder, or agent (e.g. <code>ENV=dev</code>).
     <b>GCP_AUTH_MODE</b>: <code>workload_identity</code> (default) uses the <b>pod</b> Kubernetes service account + GKE Workload Identity (no JSON key): bind the pod SA to a GCP service account and grant it Artifact Registry + GKE deploy roles; build must run <i>inside</i> the cluster. <code>secret_key</code> uses <b>GCP_CREDENTIALS_ID</b> (Secret file JSON) and <code>gcloud auth activate-service-account</code> (for agents outside the cluster or until WI is set up).
     <b>JENKINS_K8S_SERVICE_ACCOUNT</b> should match <code>k8s/services/charts/jenkins/values.yaml</code> <code>serviceAccount.name</code> (default <code>jenkins</code>) — that is the K8s identity Workload Identity annotates to your GCP service account. For <code>workload_identity</code> + <code>IMAGE_BUILD_MODE=cloud_build</code>, grant that GCP SA <code>roles/cloudbuild.builds.editor</code> (or equivalent) so <code>gcloud builds submit</code> succeeds.
@@ -74,6 +84,7 @@ pipelineJob("$job_name") {
         choiceParam('GCP_AUTH_MODE', ['workload_identity', 'secret_key'], 'workload_identity: no JSON key; pod uses GKE Workload Identity (see job description). secret_key: use GCP_CREDENTIALS_ID JSON file + activate-service-account.')
         stringParam('GCP_CREDENTIALS_ID', "$gcp_cred_id", 'Required when <b>GCP_AUTH_MODE</b> is <code>secret_key</code>: Jenkins <b>Secret file</b> credential ID (GCP service account JSON). Ignored for <code>workload_identity</code>.')
         stringParam('JENKINS_K8S_SERVICE_ACCOUNT', "$jenkins_k8s_sa", 'Must match Jenkins Helm <code>serviceAccount.name</code> (chart values); annotate this K8s SA for Workload Identity to your GCP deploy service account.')
+        booleanParam('DEPLOY_PLATFORM_INGRESS', deploy_platform_ingress_default, 'After all selected services pass health checks, deploy <code>platform-ingress</code> (k8s/env/&lt;env&gt;/platform-ingress-values.yaml). Backend Services must exist or GCE ingress will fail translation.')
     }
 
     properties {
@@ -209,12 +220,22 @@ pipeline {
                     def services = env.SELECTED_SERVICES.split(',').collect { it.trim() }
                     for (svc in services) {
                         echo "Verifying ${svc} in ${env.ENV} environment"
-                        def base = "${env.WORKSPACE}/EstateFlow/EstateFlow-Service/${svc}"
-                        if (!fileExists("${base}/pom.xml")) {
-                            error "pom.xml missing for ${svc} (${env.ENV})"
-                        }
-                        if (!fileExists("${env.WORKSPACE}/EstateFlow/EstateFlow-Service/Dockerfile.${svc}")) {
-                            error "Dockerfile.${svc} missing for ${svc} (${env.ENV})"
+                        if (svc == 'estateflow-admin-ui') {
+                            if (!fileExists("${env.WORKSPACE}/EstateFlow/EstateFlow-Admin-UI/Dockerfile")) {
+                                error "Dockerfile missing: EstateFlow/EstateFlow-Admin-UI/Dockerfile (${env.ENV})"
+                            }
+                            def uiCb = "${env.WORKSPACE}/estate-property/jenkins/cloudbuild-estateflow-admin-ui.yaml"
+                            if (buildMode == 'cloud_build' && !fileExists(uiCb)) {
+                                error "Cloud Build config missing: ${uiCb}"
+                            }
+                        } else {
+                            def base = "${env.WORKSPACE}/EstateFlow/EstateFlow-Service/${svc}"
+                            if (!fileExists("${base}/pom.xml")) {
+                                error "pom.xml missing for ${svc} (${env.ENV})"
+                            }
+                            if (!fileExists("${env.WORKSPACE}/EstateFlow/EstateFlow-Service/Dockerfile.${svc}")) {
+                                error "Dockerfile.${svc} missing for ${svc} (${env.ENV})"
+                            }
                         }
                         def chartDeploy = "${env.WORKSPACE}/estate-property/k8s/services/charts/${svc}/templates/deployment.yaml"
                         if (!fileExists(chartDeploy)) {
@@ -229,13 +250,28 @@ pipeline {
             steps {
                 script {
                     def services = env.SELECTED_SERVICES.split(',').collect { it.trim() }
-                    for (svc in services) {
+                    def testable = services.findAll { it != 'estateflow-admin-ui' }
+                    def runModuleTests = { String svc ->
                         echo "Running tests for ${svc} in ${env.ENV} environment"
                         sh """
                         cd "${env.WORKSPACE}/EstateFlow/EstateFlow-Service/scripts"
                         ./verify-module-jacoco-line.sh ${svc}
                         """
                         echo "Tests for ${svc} in ${env.ENV} environment completed"
+                    }
+                    if (testable.isEmpty()) {
+                        echo 'No Spring module tests (estateflow-admin-ui only selected).'
+                    } else if (testable.size() > 1) {
+                        def testBranches = [:]
+                        testable.each { svc ->
+                            def serviceName = svc
+                            testBranches["Test ${serviceName}"] = {
+                                runModuleTests(serviceName)
+                            }
+                        }
+                        parallel testBranches
+                    } else {
+                        testable.each { runModuleTests(it) }
                     }
                 }
             }
@@ -264,7 +300,7 @@ pipeline {
                     } else {
                         sh gkeCreds
                     }
-                    def needsDb = env.SELECTED_SERVICES.split(',').collect { it.trim() }.contains('estateflow-admin-service')
+                    def needsDb = env.SELECTED_SERVICES.split(',').collect { it.trim() }.any { JDBC_SERVICES.contains(it) }
                     if (needsDb && !env.DATABASE_HOST?.trim()) {
                         def dbHost = sh(
                             script: """
@@ -310,9 +346,25 @@ pipeline {
                 script {
                     def services = env.SELECTED_SERVICES.split(',').collect { it.trim() }
                     def imageMode = (params.IMAGE_BUILD_MODE ?: 'cloud_build').trim()
-                    for (svc in services) {
+                    def buildPushService = { String svc ->
                         echo "Building ${svc} in ${env.ENV} environment (IMAGE_BUILD_MODE=${imageMode})"
-                        if (imageMode == 'docker') {
+                        if (svc == 'estateflow-admin-ui') {
+                            if (imageMode == 'docker') {
+                                sh """
+                                cd "${env.WORKSPACE}/EstateFlow/EstateFlow-Admin-UI"
+                                docker build -t ${env.IMAGE_REPOSITORY}/${svc}:${env.IMAGE_TAG} .
+                                docker push ${env.IMAGE_REPOSITORY}/${svc}:${env.IMAGE_TAG}
+                                """
+                            } else {
+                                sh """
+                                export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+                                cd "${env.WORKSPACE}/EstateFlow/EstateFlow-Admin-UI"
+                                gcloud builds submit . \\
+                                    --config="${env.WORKSPACE}/estate-property/jenkins/cloudbuild-estateflow-admin-ui.yaml" \\
+                                    --substitutions=_AR_IMAGE=${env.IMAGE_REPOSITORY}/${svc}:${env.IMAGE_TAG}
+                                """
+                            }
+                        } else if (imageMode == 'docker') {
                             sh """
                             cd "${env.WORKSPACE}/EstateFlow/EstateFlow-Service"
                             docker build -f Dockerfile.${svc} -t ${env.IMAGE_REPOSITORY}/${svc}:${env.IMAGE_TAG} .
@@ -330,6 +382,18 @@ pipeline {
                             """
                         }
                     }
+                    if (services.size() > 1) {
+                        def buildBranches = [:]
+                        services.each { svc ->
+                            def serviceName = svc
+                            buildBranches["Build ${serviceName}"] = {
+                                buildPushService(serviceName)
+                            }
+                        }
+                        parallel buildBranches
+                    } else {
+                        services.each { buildPushService(it) }
+                    }
                 }
             }
         }
@@ -339,15 +403,14 @@ pipeline {
                 echo 'Deploying the project to K8s'
                 script {
                     def services = env.SELECTED_SERVICES.split(',').collect { it.trim() }
-                    for (svc in services) {
+                    def arRepo = env.IMAGE_REPOSITORY?.trim() && env.IMAGE_REPOSITORY.contains('/')
+                        ? env.IMAGE_REPOSITORY.substring(env.IMAGE_REPOSITORY.lastIndexOf('/') + 1).trim()
+                        : "estateflow-${env.ENV}"
+                    def dbHost = env.DATABASE_HOST?.trim()
+                    def deployService = { String svc ->
                         echo "Deploying ${svc} in ${env.ENV} environment"
-                        // deploy.sh resolves image.repository from Terraform or from these env vars (must match Build-Push-Image IMAGE_REPOSITORY).
-                        def arRepo = env.IMAGE_REPOSITORY?.trim() && env.IMAGE_REPOSITORY.contains('/')
-                            ? env.IMAGE_REPOSITORY.substring(env.IMAGE_REPOSITORY.lastIndexOf('/') + 1).trim()
-                            : "estateflow-${env.ENV}"
-                        def dbHost = env.DATABASE_HOST?.trim()
-                        if (svc == 'estateflow-admin-service' && !dbHost) {
-                            error("databaseHost unset: terraform apply (estateflow-admin-db key host + ${env.ENV}-db-host in Secret Manager), or set DATABASE_HOST on Jenkins. Re-run after Authenticate GCP (get-credentials).")
+                        if (JDBC_SERVICES.contains(svc) && !dbHost) {
+                            error("databaseHost unset for ${svc}: terraform apply (estateflow-admin-db key host + ${env.ENV}-db-host in Secret Manager), or set DATABASE_HOST on Jenkins. Re-run after Authenticate GCP (get-credentials).")
                         }
                         def dbHostExport = dbHost ? "export DATABASE_HOST='${dbHost}'" : ''
                         sh """
@@ -359,6 +422,18 @@ pipeline {
                         cd "${env.WORKSPACE}/estate-property/k8s/scripts"
                         ./deploy.sh ${env.ENV} ${svc} --set-string image.tag=${env.IMAGE_TAG}
                         """
+                    }
+                    if (services.size() > 1) {
+                        def deployBranches = [:]
+                        services.each { svc ->
+                            def serviceName = svc
+                            deployBranches["Deploy ${serviceName}"] = {
+                                deployService(serviceName)
+                            }
+                        }
+                        parallel deployBranches
+                    } else {
+                        services.each { deployService(it) }
                     }
                 }
             }
@@ -378,6 +453,35 @@ pipeline {
                             kubectl get pods -n ${env.NAMESPACE} -l "app.kubernetes.io/instance=${svc}" || kubectl get pods -n ${env.NAMESPACE}
                         """
                     }
+                }
+            }
+        }
+
+        stage('Deploy-Platform-Ingress') {
+            when {
+                expression { params.DEPLOY_PLATFORM_INGRESS }
+            }
+            steps {
+                script {
+                    def ingressValues = "${env.WORKSPACE}/estate-property/k8s/env/${env.ENV}/platform-ingress-values.yaml"
+                    if (!fileExists(ingressValues)) {
+                        error("platform-ingress values missing: ${ingressValues}")
+                    }
+                    def arRepo = env.IMAGE_REPOSITORY?.trim() && env.IMAGE_REPOSITORY.contains('/')
+                        ? env.IMAGE_REPOSITORY.substring(env.IMAGE_REPOSITORY.lastIndexOf('/') + 1).trim()
+                        : "estateflow-${env.ENV}"
+                    echo "Deploying platform-ingress after service rollouts (routes in k8s/env/${env.ENV}/platform-ingress-values.yaml)"
+                    sh """
+                    export GCP_PROJECT_ID="${env.PROJECT_ID}"
+                    export GCP_REGION="${env.REGION}"
+                    export ARTIFACT_REGISTRY_REPOSITORY="${arRepo}"
+                    cd "${env.WORKSPACE}/estate-property/k8s/scripts"
+                    ./deploy.sh ${env.ENV} platform-ingress
+                    """
+                    sh """
+                    echo "Ingress resources in app namespace ${env.NAMESPACE}:"
+                    kubectl get ingress -n ${env.NAMESPACE} -o wide || true
+                    """
                 }
             }
         }

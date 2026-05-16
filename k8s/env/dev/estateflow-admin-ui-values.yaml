@@ -1,0 +1,9 @@
+# Dev Admin UI — static bundle + nginx proxies /api/* to cluster Services.
+# Build image from EstateFlow-Admin-UI (VITE_* left empty for same-origin /api paths).
+# Deploy: ./k8s/scripts/deploy.sh dev estateflow-admin-ui --set-string image.tag=YOUR_TAG
+
+image:
+  tag: dev
+  pullPolicy: IfNotPresent
+
+replicaCount: 1

@@ -1,4 +1,5 @@
-# One Cloud Build config for **all** EstateFlow-Service images (admin, brokerage-agent, client, future modules).
+# One Cloud Build config for **all** EstateFlow-Service images (admin, brokerage-agent, client).
+# Admin UI uses jenkins/cloudbuild-estateflow-admin-ui.yaml (EstateFlow-Admin-UI context).
 # Submit with **context = EstateFlow-Service repo root** (where Dockerfile.estateflow-* and pom.xml live).
 # Jenkins passes per-build substitutions only; do not add a new YAML per service.
 #

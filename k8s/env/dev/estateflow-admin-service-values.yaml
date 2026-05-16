@@ -62,6 +62,6 @@ adminServiceEnv:
   SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "false"
   SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "false"
   SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED: "false"
-  BROKER_OWNER_PORTAL_LOGIN_BASE_URL: http://localhost:3000/broker/login
+  BROKER_OWNER_PORTAL_LOGIN_BASE_URL: https://app.dev.estateflow.com/broker/login
 
 replicaCount: 1

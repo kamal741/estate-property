@@ -1,0 +1,6 @@
+apiVersion: v2
+name: estateflow-admin-ui
+description: EstateFlow Admin UI (Vite SPA + nginx), image from EstateFlow-Admin-UI Dockerfile
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

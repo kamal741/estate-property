@@ -1,0 +1,6 @@
+apiVersion: v2
+name: estateflow-brokerage-agent-service
+description: EstateFlow brokerage & agent API (Spring WebFlux), image from Dockerfile.estateflow-brokerage-agent-service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

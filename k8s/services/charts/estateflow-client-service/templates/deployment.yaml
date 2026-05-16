@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "estateflow-client-service.fullname" . }}
+  labels:
+    {{- include "estateflow-client-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "estateflow-client-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "estateflow-client-service.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "estateflow-client-service.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          env:
+            - name: JAVA_OPTS
+              value: {{ .Values.javaOpts | quote }}
+{{- $dbHost := .Values.databaseHost | default "" }}
+{{- if ne $dbHost "" }}
+            - name: PLATFORM_DATABASE_URL
+              value: {{ printf "jdbc:postgresql://%s:5432/%s" $dbHost .Values.databaseNames.platform | quote }}
+            - name: MASTER_DATABASE_URL
+              value: {{ printf "jdbc:postgresql://%s:5432/%s" $dbHost .Values.databaseNames.master | quote }}
+            - name: BROKER_DEFAULT_DATABASE_URL
+              value: {{ printf "jdbc:postgresql://%s:5432/%s" $dbHost .Values.databaseNames.broker | quote }}
+{{- end }}
+{{- range $k, $v := .Values.serviceEnv }}
+{{- if not (and (ne $dbHost "") (or (eq $k "PLATFORM_DATABASE_URL") (eq $k "MASTER_DATABASE_URL") (eq $k "BROKER_DEFAULT_DATABASE_URL"))) }}
+            - name: {{ $k }}
+{{- if kindIs "map" $v }}
+{{ toYaml $v | indent 14 }}
+{{- else }}
+              value: {{ $v | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
