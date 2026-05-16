@@ -98,9 +98,9 @@ pipelineJob("$job_name") {
             description 'Select one or more services to test, build, and deploy (comma-separated in the build).'
         }
     }
-    definition {
-        cps {
-            script('''\
+    // Single-quoted CPS script: ${env.*} is evaluated at runtime. Inject allowed list at Job DSL seed time (not ${} in ''').
+    def allowedServicesLiteral = DEPLOYABLE_SERVICES.inspect()
+    def pipelineScript = '''\
 pipeline {
     agent any
     options {
@@ -118,7 +118,7 @@ pipeline {
         stage('Validate') {
             steps {
                 script {
-                    def allowed = ${DEPLOYABLE_SERVICES.inspect()} as Set
+                    def allowed = __ALLOWED_SERVICES__ as Set
                     def raw = (params.SERVICE_NAMES ?: params.SERVICE_NAME ?: '').toString()
                     def services = raw.split(',').collect { it.trim() }.findAll { it }
                     if (services.isEmpty()) {
@@ -396,7 +396,11 @@ pipeline {
         }
     }
 }
-'''.stripIndent())
+'''.stripIndent().replace('__ALLOWED_SERVICES__', allowedServicesLiteral)
+
+    definition {
+        cps {
+            script(pipelineScript)
         }
     }
 }
