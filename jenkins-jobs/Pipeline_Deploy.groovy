@@ -252,11 +252,35 @@ pipeline {
                         def arRepo = env.IMAGE_REPOSITORY?.trim() && env.IMAGE_REPOSITORY.contains('/')
                             ? env.IMAGE_REPOSITORY.substring(env.IMAGE_REPOSITORY.lastIndexOf('/') + 1).trim()
                             : "estateflow-${env.ENV}"
+                        def dbHost = env.DATABASE_HOST?.trim()
+                        if (!dbHost && svc == 'estateflow-admin-service') {
+                            dbHost = sh(
+                                script: """
+                                cd "${env.WORKSPACE}/estate-property/deployment/terraform/envs/${env.ENV}"
+                                terraform output -raw db_private_ip 2>/dev/null || true
+                                """,
+                                returnStdout: true
+                            ).trim()
+                            if (!dbHost) {
+                                dbHost = sh(
+                                    script: """
+                                    cd "${env.WORKSPACE}/estate-property/deployment/terraform/envs/${env.ENV}"
+                                    terraform output -raw db_public_ip 2>/dev/null || true
+                                    """,
+                                    returnStdout: true
+                                ).trim()
+                            }
+                        }
+                        if (svc == 'estateflow-admin-service' && !dbHost) {
+                            error('databaseHost unset: define DATABASE_HOST on the Jenkins controller/folder for this ENV, or ensure terraform output db_private_ip works in estate-property/deployment/terraform/envs/' + env.ENV)
+                        }
+                        def dbHostExport = dbHost ? "export DATABASE_HOST='${dbHost}'" : ''
                         sh """
                         export NAMESPACE="${env.NAMESPACE}"
                         export GCP_PROJECT_ID="${env.PROJECT_ID}"
                         export GCP_REGION="${env.REGION}"
                         export ARTIFACT_REGISTRY_REPOSITORY="${arRepo}"
+                        ${dbHostExport}
                         cd "${env.WORKSPACE}/estate-property/k8s/scripts"
                         ./deploy.sh ${env.ENV} ${svc} --set-string image.tag=${env.IMAGE_TAG}
                         """

@@ -44,6 +44,10 @@ show_usage() {
     artifact_registry_docker_prefix from deployment/terraform/envs/<env>, then /estateflow-admin-service
     If that output is missing (old state), falls back to stripping /jenkins from jenkins_image_repository.
     SKIP_ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY_AUTO=1  → do not inject; use values + chart defaults only
+  estateflow-admin-service databaseHost (JDBC URLs), highest precedence first:
+    DATABASE_HOST or DB_PRIVATE_IP  (Cloud SQL IP or hostname)
+    Else if SKIP_DATABASE_HOST_AUTO is unset: terraform output -raw db_private_ip (then db_public_ip if private is empty)
+    SKIP_DATABASE_HOST_AUTO=1  → do not inject (not recommended for GKE; chart falls back to docker-compose postgres URLs)
   Jenkins Helm namespace: defaults to Terraform output gke_namespace (e.g. dev-estateflow), else <env>-estateflow.
     Override with NAMESPACE=... or JENKINS_HELM_NAMESPACE=... (NAMESPACE wins).
   Helm upgrades: HELM_UPGRADE_FORCE=1 fixes SSA field conflicts by forcing resource replacement. On Helm 4+ this uses
@@ -127,6 +131,36 @@ estateflow_admin_service_resolve_image_repository() {
   fi
 }
 
+# Cloud SQL host for JDBC URL generation in the admin-service chart (no jdbc: prefix).
+estateflow_admin_service_resolve_database_host() {
+  local env="$1"
+  if [[ -n "${DATABASE_HOST:-}" ]]; then
+    printf '%s' "${DATABASE_HOST}"
+    return 0
+  fi
+  if [[ -n "${DB_PRIVATE_IP:-}" ]]; then
+    printf '%s' "${DB_PRIVATE_IP}"
+    return 0
+  fi
+  if [[ "${SKIP_DATABASE_HOST_AUTO:-}" == "1" ]]; then
+    return 0
+  fi
+  local tfdir="$REPO_ROOT/deployment/terraform/envs/$env"
+  if [[ ! -d "$tfdir" ]] || ! command -v terraform >/dev/null 2>&1; then
+    return 0
+  fi
+  local private public
+  private="$(cd "$tfdir" && terraform output -raw db_private_ip 2>/dev/null)" || true
+  if [[ -n "$private" && "$private" != "null" ]]; then
+    printf '%s' "$private"
+    return 0
+  fi
+  public="$(cd "$tfdir" && terraform output -raw db_public_ip 2>/dev/null)" || true
+  if [[ -n "$public" && "$public" != "null" ]]; then
+    printf '%s' "$public"
+  fi
+}
+
 sync_kubeconfig_if_requested() {
   local env="$1"
   case "${SYNC_GKE_KUBECONFIG:-}" in 1 | true | yes) ;; *) return 0 ;; esac
@@ -191,11 +225,18 @@ helm_upgrade() {
       echo "    (Jenkins image.tag from JENKINS_IMAGE_TAG: ${JENKINS_IMAGE_TAG})"
     fi
   elif [[ "$service" == "estateflow-admin-service" ]]; then
-    local admin_repo
+    local admin_repo db_host
     admin_repo="$(estateflow_admin_service_resolve_image_repository "$env")"
     if [[ -n "$admin_repo" ]]; then
       estateflow_admin_image_overrides+=(--set-string "image.repository=$admin_repo")
       echo "    (estateflow-admin-service image.repository from env/terraform: $admin_repo)"
+    fi
+    db_host="$(estateflow_admin_service_resolve_database_host "$env")"
+    if [[ -n "$db_host" ]]; then
+      estateflow_admin_image_overrides+=(--set-string "databaseHost=$db_host")
+      echo "    (estateflow-admin-service databaseHost for JDBC URLs: $db_host)"
+    else
+      echo "    (WARN: estateflow-admin-service databaseHost unset — JDBC URLs will use chart docker-compose defaults (postgres:5432). Set DATABASE_HOST or run terraform output db_private_ip.)" >&2
     fi
   fi
 

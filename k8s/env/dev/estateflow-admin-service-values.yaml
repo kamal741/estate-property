@@ -1,8 +1,8 @@
 # Dev overrides: namespace defaults to Terraform **gke_namespace** (e.g. dev-estateflow) via deploy.sh.
 # Deploy (from repo root) — **image.repository** is injected from Terraform (**artifact_registry_docker_prefix**/estateflow-admin-service)
 # or from GCP_PROJECT_ID + GCP_REGION + ARTIFACT_REGISTRY_REPOSITORY; override with ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY:
-#   ./k8s/scripts/deploy.sh dev estateflow-admin-service --set-string image.tag=YOUR_TAG \
-#     --set-string databaseHost="$(cd deployment/terraform/envs/dev && terraform output -raw db_private_ip)"
+#   ./k8s/scripts/deploy.sh dev estateflow-admin-service --set-string image.tag=YOUR_TAG
+# databaseHost is set automatically from terraform output db_private_ip (or export DATABASE_HOST).
 #
 # Image path matches Jenkins **IMAGE_REPOSITORY**/estateflow-admin-service (see jenkins-jobs/Pipeline_Deploy.groovy).
 #

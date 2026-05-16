@@ -48,7 +48,9 @@ containerPort: 8080
 # Passed to the JVM (image entrypoint: exec java $JAVA_OPTS -jar …).
 javaOpts: "-XX:MaxRAMPercentage=75.0"
 
-# Same keys as **estateflow-admin** in EstateFlow-Service **docker-compose.yml** (defaults match that file).
+# Do not set PLATFORM_/MASTER_/BROKER_/ADMIN_DATABASE_URL here for GKE — set databaseHost (deploy.sh sets it from
+# terraform output db_private_ip) so the chart generates jdbc:postgresql://<host>:5432/<db> URLs.
+# For local docker-compose only, set databaseHost: postgres in env values or add those four URLs under adminServiceEnv.
 # Override per env in k8s/env/<env>/estateflow-admin-service-values.yaml. Use a map value for valueFrom, e.g.:
 #   JWT_SECRET:
 #     valueFrom:
@@ -58,10 +60,6 @@ javaOpts: "-XX:MaxRAMPercentage=75.0"
 adminServiceEnv:
   SPRING_PROFILES_ACTIVE: dev
   PORT: "8080"
-  PLATFORM_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_platform
-  MASTER_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_master
-  BROKER_DEFAULT_DATABASE_URL: jdbc:postgresql://postgres:5432/estateflow_broker_default
-  ADMIN_DATABASE_URL: jdbc:postgresql://postgres:5432/postgres
   DATABASE_USERNAME: postgres
   DATABASE_PASSWORD: postgres
   JWT_SECRET: dev-secret-must-be-at-least-32-bytes-long!
