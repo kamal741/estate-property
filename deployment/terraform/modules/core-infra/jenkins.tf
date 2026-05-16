@@ -41,6 +41,7 @@ resource "google_service_account_iam_member" "jenkins_workload_identity_user" {
 resource "google_secret_manager_secret_iam_member" "jenkins_operator_secrets" {
   for_each = var.enable_jenkins_gcp_service_account ? {
     db_password = google_secret_manager_secret.db_password.id
+    db_host     = google_secret_manager_secret.db_host.id
     redis_host  = google_secret_manager_secret.redis_host.id
     redis_auth  = google_secret_manager_secret.redis_auth.id
   } : {}

@@ -1,4 +1,10 @@
 locals {
+  # JDBC / psql host: private IP when enabled, else public (empty string treated as unset).
+  db_host = coalesce(
+    try(nullif(google_sql_database_instance.postgres.private_ip_address, ""), null),
+    try(nullif(google_sql_database_instance.postgres.public_ip_address, ""), null)
+  )
+
   common_labels = merge(
     {
       env        = var.env

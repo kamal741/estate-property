@@ -22,6 +22,15 @@ output "db_private_ip" {
   value = module.infra.db_private_ip
 }
 
+output "db_host" {
+  description = "Cloud SQL host for JDBC (used in estateflow-admin-db secret and CI)."
+  value       = module.infra.db_host
+}
+
+output "secret_db_host_id" {
+  value = module.infra.secret_db_host_id
+}
+
 output "redis_host" {
   value = module.infra.redis_host
 }

@@ -40,6 +40,11 @@ output "db_private_ip" {
   value       = google_sql_database_instance.postgres.private_ip_address
 }
 
+output "db_host" {
+  description = "Cloud SQL host for JDBC (private IP when enabled, else public)."
+  value       = local.db_host
+}
+
 output "redis_host" {
   description = "Memorystore Redis host (internal)."
   value       = google_redis_instance.redis.host
@@ -53,6 +58,11 @@ output "redis_port" {
 output "secret_db_password_id" {
   description = "Secret Manager secret id holding the generated DB password."
   value       = google_secret_manager_secret.db_password.secret_id
+}
+
+output "secret_db_host_id" {
+  description = "Secret Manager secret id holding the Cloud SQL host (private or public IP)."
+  value       = google_secret_manager_secret.db_host.secret_id
 }
 
 output "secret_redis_host_id" {

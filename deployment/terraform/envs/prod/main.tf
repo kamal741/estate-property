@@ -56,6 +56,7 @@ resource "kubernetes_secret_v1" "estateflow_admin_db" {
   data = {
     username = base64encode(module.infra.db_user)
     password = base64encode(module.infra.db_password)
+    host     = base64encode(module.infra.db_host)
   }
 
   depends_on = [kubernetes_namespace_v1.app]

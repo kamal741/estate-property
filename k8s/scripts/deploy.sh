@@ -46,7 +46,9 @@ show_usage() {
     SKIP_ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY_AUTO=1  → do not inject; use values + chart defaults only
   estateflow-admin-service databaseHost (JDBC URLs), highest precedence first:
     DATABASE_HOST or DB_PRIVATE_IP  (Cloud SQL IP or hostname)
-    Else if SKIP_DATABASE_HOST_AUTO is unset: terraform output -raw db_private_ip (then db_public_ip if private is empty)
+    Else: kubectl secret estateflow-admin-db key host (namespace from NAMESPACE or gke_namespace)
+    Else: gcloud secrets versions access latest --secret=<env>-db-host (needs GCP_PROJECT_ID)
+    Else if SKIP_DATABASE_HOST_AUTO is unset: terraform output db_host (then db_private_ip / db_public_ip)
     SKIP_DATABASE_HOST_AUTO=1  → do not inject (not recommended for GKE; chart falls back to docker-compose postgres URLs)
   Jenkins Helm namespace: defaults to Terraform output gke_namespace (e.g. dev-estateflow), else <env>-estateflow.
     Override with NAMESPACE=... or JENKINS_HELM_NAMESPACE=... (NAMESPACE wins).
@@ -134,6 +136,10 @@ estateflow_admin_service_resolve_image_repository() {
 # Cloud SQL host for JDBC URL generation in the admin-service chart (no jdbc: prefix).
 estateflow_admin_service_resolve_database_host() {
   local env="$1"
+  local ns="${NAMESPACE:-}"
+  if [[ -z "$ns" ]]; then
+    ns="$(jenkins_helm_target_namespace "$env")"
+  fi
   if [[ -n "${DATABASE_HOST:-}" ]]; then
     printf '%s' "${DATABASE_HOST}"
     return 0
@@ -145,11 +151,40 @@ estateflow_admin_service_resolve_database_host() {
   if [[ "${SKIP_DATABASE_HOST_AUTO:-}" == "1" ]]; then
     return 0
   fi
+  if command -v kubectl >/dev/null 2>&1 && [[ -n "$ns" ]]; then
+    local from_secret
+    from_secret="$(kubectl get secret estateflow-admin-db -n "$ns" -o jsonpath='{.data.host}' 2>/dev/null \
+      | base64 -d 2>/dev/null | tr -d '\r\n')" || true
+    if [[ -n "$from_secret" ]]; then
+      printf '%s' "$from_secret"
+      return 0
+    fi
+  fi
+  if command -v gcloud >/dev/null 2>&1; then
+    local project="${GCP_PROJECT_ID:-}"
+    if [[ -z "$project" && -n "${PROJECT_ID:-}" ]]; then
+      project="$PROJECT_ID"
+    fi
+    if [[ -n "$project" ]]; then
+      local from_sm
+      from_sm="$(gcloud secrets versions access latest --secret="${env}-db-host" --project="$project" 2>/dev/null \
+        | tr -d '\r\n')" || true
+      if [[ -n "$from_sm" ]]; then
+        printf '%s' "$from_sm"
+        return 0
+      fi
+    fi
+  fi
   local tfdir="$REPO_ROOT/deployment/terraform/envs/$env"
   if [[ ! -d "$tfdir" ]] || ! command -v terraform >/dev/null 2>&1; then
     return 0
   fi
-  local private public
+  local host private public
+  host="$(cd "$tfdir" && terraform output -raw db_host 2>/dev/null)" || true
+  if [[ -n "$host" && "$host" != "null" ]]; then
+    printf '%s' "$host"
+    return 0
+  fi
   private="$(cd "$tfdir" && terraform output -raw db_private_ip 2>/dev/null)" || true
   if [[ -n "$private" && "$private" != "null" ]]; then
     printf '%s' "$private"

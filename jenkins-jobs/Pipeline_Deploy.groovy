@@ -19,11 +19,18 @@ def git_cred_deploy = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_DEPLOY')?.
 def git_cred_service = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_SERVICE')?.defaultValue ?: ''
 def gcp_cred_id = pdp?.getParameterDefinition('GCP_CREDENTIALS_ID')?.defaultValue ?: ''
 def jenkins_k8s_sa = pdp?.getParameterDefinition('JENKINS_K8S_SERVICE_ACCOUNT')?.defaultValue ?: 'jenkins'
+def legacy_service = pdp?.getParameterDefinition('SERVICE_NAME')?.defaultValue
+    ?: pdp?.getParameterDefinition('SERVICE_NAMES')?.defaultValue
+    ?: 'estateflow-admin-service'
+def legacy_set = legacy_service.split(',').collect { it.trim() } as Set
+def deploy_admin_default = legacy_set.contains('estateflow-admin-service')
+def deploy_broker_default = legacy_set.contains('estateflow-brokerage-agent-service')
+def deploy_client_default = legacy_set.contains('estateflow-client-service')
 
 pipelineJob("$job_name") {
     // HTML requires OWASP Safe HTML formatter: antisamy-markup-formatter in jenkins/plugins.txt + init 02-configureMarkupFormatter.groovy.
     description("""\
-    Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check.
+    Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check. Select one or more services with the <b>DEPLOY_*</b> checkboxes.
     <b>ENV</b> is not a job parameter; it must be defined on the controller, folder, or agent (e.g. <code>ENV=dev</code>).
     <b>GCP_AUTH_MODE</b>: <code>workload_identity</code> (default) uses the <b>pod</b> Kubernetes service account + GKE Workload Identity (no JSON key): bind the pod SA to a GCP service account and grant it Artifact Registry + GKE deploy roles; build must run <i>inside</i> the cluster. <code>secret_key</code> uses <b>GCP_CREDENTIALS_ID</b> (Secret file JSON) and <code>gcloud auth activate-service-account</code> (for agents outside the cluster or until WI is set up).
     <b>JENKINS_K8S_SERVICE_ACCOUNT</b> should match <code>k8s/services/charts/jenkins/values.yaml</code> <code>serviceAccount.name</code> (default <code>jenkins</code>) — that is the K8s identity Workload Identity annotates to your GCP service account. For <code>workload_identity</code> + <code>IMAGE_BUILD_MODE=cloud_build</code>, grant that GCP SA <code>roles/cloudbuild.builds.editor</code> (or equivalent) so <code>gcloud builds submit</code> succeeds.
@@ -43,7 +50,9 @@ pipelineJob("$job_name") {
         stringParam('GIT_BRANCH_SERVICE', git_brnch_service, 'Git branch (EstateFlow)')
         stringParam('GIT_CREDENTIALS_ID_DEPLOY', "$git_cred_deploy", 'Jenkins credential ID for HTTPS checkout of estate-property. Leave empty if the repo is public.')
         stringParam('GIT_CREDENTIALS_ID_SERVICE', "$git_cred_service", 'Jenkins credential ID for HTTPS checkout of pizenith-technologies/EstateFlow. Required for private repos: use Username with password (GitHub username + Personal Access Token); GitHub does not accept account passwords for Git over HTTPS.')
-        choiceParam('SERVICE_NAME', ['estateflow-admin-service', 'estateflow-brokerage-agent-service', 'estateflow-client-service'], 'Service name')
+        booleanParam('DEPLOY_ESTATEFLOW_ADMIN_SERVICE', deploy_admin_default, 'estateflow-admin-service')
+        booleanParam('DEPLOY_ESTATEFLOW_BROKERAGE_AGENT_SERVICE', deploy_broker_default, 'estateflow-brokerage-agent-service')
+        booleanParam('DEPLOY_ESTATEFLOW_CLIENT_SERVICE', deploy_client_default, 'estateflow-client-service')
         choiceParam('IMAGE_BUILD_MODE', ['cloud_build', 'docker'], 'cloud_build: one shared <code>jenkins/cloudbuild-estateflow.yaml</code> + <code>gcloud builds submit</code> (substitutions pick Dockerfile + image; no Docker socket). docker: local build/push (needs <code>/var/run/docker.sock</code>).')
         choiceParam('GCP_AUTH_MODE', ['workload_identity', 'secret_key'], 'workload_identity: no JSON key; pod uses GKE Workload Identity (see job description). secret_key: use GCP_CREDENTIALS_ID JSON file + activate-service-account.')
         stringParam('GCP_CREDENTIALS_ID', "$gcp_cred_id", 'Required when <b>GCP_AUTH_MODE</b> is <code>secret_key</code>: Jenkins <b>Secret file</b> credential ID (GCP service account JSON). Ignored for <code>workload_identity</code>.')
@@ -73,6 +82,24 @@ pipeline {
         stage('Validate') {
             steps {
                 script {
+                    def services = []
+                    if (params.DEPLOY_ESTATEFLOW_ADMIN_SERVICE) {
+                        services << 'estateflow-admin-service'
+                    }
+                    if (params.DEPLOY_ESTATEFLOW_BROKERAGE_AGENT_SERVICE) {
+                        services << 'estateflow-brokerage-agent-service'
+                    }
+                    if (params.DEPLOY_ESTATEFLOW_CLIENT_SERVICE) {
+                        services << 'estateflow-client-service'
+                    }
+                    if (services.isEmpty() && params.SERVICE_NAME?.trim()) {
+                        services << params.SERVICE_NAME.trim()
+                    }
+                    if (services.isEmpty()) {
+                        error('Select at least one service to deploy (DEPLOY_* checkboxes).')
+                    }
+                    env.SELECTED_SERVICES = services.join(',')
+                    echo "Selected services: ${env.SELECTED_SERVICES}"
                     if (!env.ENV?.trim()) {
                         error('ENV is not set. Define ENV in Jenkins (global properties, folder, or agent environment), e.g. dev or prod.')
                     }
@@ -149,7 +176,7 @@ pipeline {
                             error "Cloud Build config missing: ${cb} (checkout estate-property on a branch that includes jenkins/cloudbuild-estateflow.yaml)"
                         }
                     }
-                    def services = [params.SERVICE_NAME]
+                    def services = env.SELECTED_SERVICES.split(',').collect { it.trim() }
                     for (svc in services) {
                         echo "Verifying ${svc} in ${env.ENV} environment"
                         def base = "${env.WORKSPACE}/EstateFlow/EstateFlow-Service/${svc}"
@@ -171,7 +198,7 @@ pipeline {
         stage('Running-Tests') {
             steps {
                 script {
-                    def services = [params.SERVICE_NAME]
+                    def services = env.SELECTED_SERVICES.split(',').collect { it.trim() }
                     for (svc in services) {
                         echo "Running tests for ${svc} in ${env.ENV} environment"
                         sh """
@@ -188,24 +215,60 @@ pipeline {
             steps {
                 script {
                     def authMode = (params.GCP_AUTH_MODE ?: 'workload_identity').trim()
+                    def gkeCreds = """
+                        export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+                        gcloud config set project ${env.PROJECT_ID} --quiet
+                        gcloud auth configure-docker ${env.REGION}-docker.pkg.dev -q
+                        gcloud container clusters get-credentials ${env.GKE_CLUSTER} \\
+                            --zone ${env.GKE_ZONE} \\
+                            --project ${env.PROJECT_ID}
+                    """
                     if (authMode == 'secret_key') {
                         withCredentials([file(credentialsId: params.GCP_CREDENTIALS_ID.trim(), variable: 'GCP_KEY')]) {
                             sh """
                             export CLOUDSDK_CORE_DISABLE_PROMPTS=1
                             gcloud auth activate-service-account --key-file=${env.GCP_KEY}
-                            gcloud config set project ${env.PROJECT_ID} --quiet
-                            gcloud auth configure-docker ${env.REGION}-docker.pkg.dev -q
-                            gcloud container clusters get-credentials ${env.GKE_CLUSTER} \\
-                                --zone ${env.GKE_ZONE} \\
-                                --project ${env.PROJECT_ID}
+                            ${gkeCreds}
                             """
                         }
                     } else {
-                        sh """
-                        export CLOUDSDK_CORE_DISABLE_PROMPTS=1
-                        gcloud config set project ${env.PROJECT_ID} --quiet
-                        gcloud auth configure-docker ${env.REGION}-docker.pkg.dev -q
-                        """
+                        sh gkeCreds
+                    }
+                    def needsDb = env.SELECTED_SERVICES.split(',').collect { it.trim() }.contains('estateflow-admin-service')
+                    if (needsDb && !env.DATABASE_HOST?.trim()) {
+                        def dbHost = sh(
+                            script: """
+                            set +e
+                            kubectl get secret estateflow-admin-db -n ${env.NAMESPACE} \\
+                                -o jsonpath='{.data.host}' 2>/dev/null | base64 -d | tr -d '\\r\\n'
+                            """,
+                            returnStdout: true
+                        ).trim()
+                        if (!dbHost) {
+                            dbHost = sh(
+                                script: """
+                                gcloud secrets versions access latest \\
+                                    --secret=${env.ENV}-db-host \\
+                                    --project=${env.PROJECT_ID} 2>/dev/null | tr -d '\\r\\n'
+                                """,
+                                returnStdout: true
+                            ).trim()
+                        }
+                        if (!dbHost) {
+                            dbHost = sh(
+                                script: """
+                                cd "${env.WORKSPACE}/estate-property/deployment/terraform/envs/${env.ENV}"
+                                terraform output -raw db_host 2>/dev/null || \\
+                                terraform output -raw db_private_ip 2>/dev/null || \\
+                                terraform output -raw db_public_ip 2>/dev/null || true
+                                """,
+                                returnStdout: true
+                            ).trim()
+                        }
+                        if (dbHost) {
+                            env.DATABASE_HOST = dbHost
+                            echo "DATABASE_HOST resolved: ${dbHost}"
+                        }
                     }
                 }
             }
@@ -215,7 +278,7 @@ pipeline {
             steps {
                 echo 'Building the project...'
                 script {
-                    def services = [params.SERVICE_NAME]
+                    def services = env.SELECTED_SERVICES.split(',').collect { it.trim() }
                     def imageMode = (params.IMAGE_BUILD_MODE ?: 'cloud_build').trim()
                     for (svc in services) {
                         echo "Building ${svc} in ${env.ENV} environment (IMAGE_BUILD_MODE=${imageMode})"
@@ -245,7 +308,7 @@ pipeline {
             steps {
                 echo 'Deploying the project to K8s'
                 script {
-                    def services = [params.SERVICE_NAME]
+                    def services = env.SELECTED_SERVICES.split(',').collect { it.trim() }
                     for (svc in services) {
                         echo "Deploying ${svc} in ${env.ENV} environment"
                         // deploy.sh resolves image.repository from Terraform or from these env vars (must match Build-Push-Image IMAGE_REPOSITORY).
@@ -253,26 +316,8 @@ pipeline {
                             ? env.IMAGE_REPOSITORY.substring(env.IMAGE_REPOSITORY.lastIndexOf('/') + 1).trim()
                             : "estateflow-${env.ENV}"
                         def dbHost = env.DATABASE_HOST?.trim()
-                        if (!dbHost && svc == 'estateflow-admin-service') {
-                            dbHost = sh(
-                                script: """
-                                cd "${env.WORKSPACE}/estate-property/deployment/terraform/envs/${env.ENV}"
-                                terraform output -raw db_private_ip 2>/dev/null || true
-                                """,
-                                returnStdout: true
-                            ).trim()
-                            if (!dbHost) {
-                                dbHost = sh(
-                                    script: """
-                                    cd "${env.WORKSPACE}/estate-property/deployment/terraform/envs/${env.ENV}"
-                                    terraform output -raw db_public_ip 2>/dev/null || true
-                                    """,
-                                    returnStdout: true
-                                ).trim()
-                            }
-                        }
                         if (svc == 'estateflow-admin-service' && !dbHost) {
-                            error('databaseHost unset: define DATABASE_HOST on the Jenkins controller/folder for this ENV, or ensure terraform output db_private_ip works in estate-property/deployment/terraform/envs/' + env.ENV)
+                            error("databaseHost unset: terraform apply (estateflow-admin-db key host + ${env.ENV}-db-host in Secret Manager), or set DATABASE_HOST on Jenkins. Re-run after Authenticate GCP (get-credentials).")
                         }
                         def dbHostExport = dbHost ? "export DATABASE_HOST='${dbHost}'" : ''
                         sh """
@@ -291,14 +336,19 @@ pipeline {
 
         stage('Pod-Health-Check') {
             steps {
-                sh """
-                    echo "Waiting for rollout: deployment/${params.SERVICE_NAME} in namespace: ${env.NAMESPACE}"
-                    kubectl rollout status deployment/${params.SERVICE_NAME} \\
-                        -n ${env.NAMESPACE} \\
-                        --timeout=300s
-                    echo "Final pod status:"
-                    kubectl get pods -n ${env.NAMESPACE} -l "app.kubernetes.io/instance=${params.SERVICE_NAME}" || kubectl get pods -n ${env.NAMESPACE}
-                """
+                script {
+                    def services = env.SELECTED_SERVICES.split(',').collect { it.trim() }
+                    for (svc in services) {
+                        sh """
+                            echo "Waiting for rollout: deployment/${svc} in namespace: ${env.NAMESPACE}"
+                            kubectl rollout status deployment/${svc} \\
+                                -n ${env.NAMESPACE} \\
+                                --timeout=300s
+                            echo "Final pod status (${svc}):"
+                            kubectl get pods -n ${env.NAMESPACE} -l "app.kubernetes.io/instance=${svc}" || kubectl get pods -n ${env.NAMESPACE}
+                        """
+                    }
+                }
             }
         }
     }
