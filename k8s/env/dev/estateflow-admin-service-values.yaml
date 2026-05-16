@@ -12,6 +12,7 @@
 # or use External Secrets instead.
 # Override: set `create_app_runtime_secrets = false` in `terraform.tfvars` and manage secrets yourself.
 # If apply fails because a secret already exists, delete it once: `kubectl delete secret estateflow-admin-db -n dev-estateflow` (same for estateflow-redis), then re-apply.
+# If DB/Redis env looks wrong (double base64 in secrets), run: `./deployment/scripts/sync-app-runtime-secrets.sh dev`
 #
 # Passwords are also in Secret Manager (`dev-db-password`, `dev-redis-auth`, `dev-redis-host`).
 # To use different secret names or keys, edit the valueFrom blocks under adminServiceEnv below.
