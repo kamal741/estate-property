@@ -38,3 +38,12 @@ variable "jenkins_grant_namespace_admin" {
   description = "When true with enable_jenkins_workload_identity, create a RoleBinding to ClusterRole admin scoped to the app namespace."
   default     = true
 }
+
+variable "artifact_registry_repository_iam_extras" {
+  type = list(object({
+    member = string
+    role   = string
+  }))
+  description = "Optional extra IAM on the Artifact Registry Docker repo (e.g. user:you@gmail.com as roles/artifactregistry.writer for local docker push). Default []."
+  default     = []
+}

@@ -17,3 +17,8 @@ region     = "us-central1"
 # enable_jenkins_workload_identity = false
 # Use one shared account id only in a single env root (both dev+prod in same project need different ids or import one SA).
 # jenkins_gcp_sa_account_id = "jenkins-sa"
+
+# Optional: extra Artifact Registry repo IAM (e.g. your Google user for local docker push to estateflow-<env>).
+# artifact_registry_repository_iam_extras = [
+#   { member = "user:you@gmail.com", role = "roles/artifactregistry.writer" },
+# ]

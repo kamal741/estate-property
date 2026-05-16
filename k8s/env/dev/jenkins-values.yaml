@@ -20,9 +20,9 @@
 #   or terraform output jenkins_image_repository. deploy-platform.sh exports JENKINS_IMAGE_REPOSITORY when
 #   ARTIFACT_REGISTRY_REPOSITORY is set (with project/region from terraform.tfvars).
 #
-# Login / security: for **enforced** login, create the Secret then restart the controller pod (or set optionalSecret: false):
+# Login / security (same as prod — create Secret before the controller can start; init script needs JENKINS_ADMIN_PASSWORD):
 #   kubectl create secret generic jenkins-admin -n dev-estateflow --from-literal=password='YOUR_STRONG_PASSWORD'
-# With optionalSecret: true (dev default), Helm can install before the Secret exists; init enables security only after the env is set (create Secret + rollout restart).
+# optionalSecret: false avoids a "no login" controller when the Secret was never created (optional: true used to allow that).
 #
 # Helm SSA conflict on Service (e.g. "conflict with kubectl-patch" on spec.type): the Service was changed outside Helm.
 # Fix: kubectl delete svc jenkins -n dev-estateflow then redeploy (do not use HELM_UPGRADE_FORCE for jenkins: it tries to
@@ -31,7 +31,7 @@
 security:
   localAdmin:
     enabled: true
-    optionalSecret: true
+    optionalSecret: false
     username: admin
     existingSecret: jenkins-admin
     existingSecretKey: password

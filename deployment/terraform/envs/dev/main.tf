@@ -22,6 +22,8 @@ module "infra" {
   enable_jenkins_gcp_service_account = var.enable_jenkins_workload_identity
   jenkins_gcp_sa_account_id          = var.jenkins_gcp_sa_account_id
   jenkins_kubernetes_sa_name         = var.jenkins_kubernetes_sa_name
+
+  artifact_registry_repository_iam_extras = var.artifact_registry_repository_iam_extras
 }
 
 resource "kubernetes_namespace_v1" "app" {

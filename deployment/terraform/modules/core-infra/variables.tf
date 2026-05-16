@@ -207,6 +207,24 @@ variable "artifact_registry_repository_id" {
   nullable    = true
 }
 
+# Optional extra bindings on the Docker repository only (e.g. user:...@... for local docker push).
+variable "artifact_registry_repository_iam_extras" {
+  type = list(object({
+    member = string
+    role   = string
+  }))
+  description = "Additional Artifact Registry repository IAM members (e.g. [{ member = \"user:you@example.com\", role = \"roles/artifactregistry.writer\" }]). Core bindings (GKE nodes reader, Cloud Build writer) are always managed separately."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for b in var.artifact_registry_repository_iam_extras :
+      can(regex("^(user:|serviceAccount:|group:)", b.member))
+    ])
+    error_message = "Each extra member must use a full principal prefix: user:, serviceAccount:, or group:."
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Cloud Build (default staging bucket IAM)
 # ---------------------------------------------------------------------------

@@ -15,3 +15,8 @@ region     = "us-central1"
 # Jenkins Workload Identity — see dev/terraform.tfvars.example comments.
 # enable_jenkins_workload_identity = false
 # jenkins_gcp_sa_account_id = "jenkins-sa"
+
+# Optional: extra Artifact Registry repo IAM (see dev/terraform.tfvars.example).
+# artifact_registry_repository_iam_extras = [
+#   { member = "user:you@gmail.com", role = "roles/artifactregistry.writer" },
+# ]
