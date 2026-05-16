@@ -2,6 +2,7 @@
 # Fixable bumps below (e.g. 2026-04-29 advisory). Plugins marked UNSOLVED: no fixed release yet — plan migration/removal.
 active-directory:2.41
 ansicolor:536.v13fa_b_860c267
+# OWASP Safe HTML for job/parameter descriptions; init.groovy.d/02-configureMarkupFormatter.groovy enables it (default is escaped/plain).
 antisamy-markup-formatter:173.v680e3a_b_69ff3
 apache-httpcomponents-client-4-api:4.5.14-269.vfa_2321039a_83
 apache-httpcomponents-client-5-api:5.6-193.vf028a_770a_fa_c

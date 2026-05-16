@@ -1,7 +1,7 @@
 # Dev overrides: namespace defaults to Terraform **gke_namespace** (e.g. dev-estateflow) via deploy.sh.
-# Deploy (from repo root):
-#   ./k8s/scripts/deploy.sh dev estateflow-admin-service \
-#     --set-string image.tag=YOUR_TAG \
+# Deploy (from repo root) — **image.repository** is injected from Terraform (**artifact_registry_docker_prefix**/estateflow-admin-service)
+# or from GCP_PROJECT_ID + GCP_REGION + ARTIFACT_REGISTRY_REPOSITORY; override with ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY:
+#   ./k8s/scripts/deploy.sh dev estateflow-admin-service --set-string image.tag=YOUR_TAG \
 #     --set-string databaseHost="$(cd deployment/terraform/envs/dev && terraform output -raw db_private_ip)"
 #
 # Image path matches Jenkins **IMAGE_REPOSITORY**/estateflow-admin-service (see jenkins-jobs/Pipeline_Deploy.groovy).
@@ -17,7 +17,6 @@
 # To use different secret names or keys, edit the valueFrom blocks under adminServiceEnv below.
 
 image:
-  repository: us-central1-docker.pkg.dev/project-cd7b56f0-4325-4b25-88a/estateflow-dev/estateflow-admin-service
   tag: dev
   pullPolicy: IfNotPresent
 

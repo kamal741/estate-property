@@ -87,6 +87,11 @@ output "jenkins_image_repository" {
   value       = module.infra.jenkins_image_repository
 }
 
+output "artifact_registry_docker_prefix" {
+  description = "REGION-docker.pkg.dev/PROJECT/REPO_ID for app images; Helm uses prefix/estateflow-admin-service when deploy.sh injects image.repository."
+  value       = module.infra.artifact_registry_docker_prefix
+}
+
 output "jenkins_gcp_service_account_email" {
   description = "Jenkins dedicated GCP service account (Workload Identity); null if enable_jenkins_workload_identity is false."
   value       = module.infra.jenkins_gcp_service_account_email
@@ -103,6 +108,7 @@ output "jenkins_gke_context" {
     platform_ingress_helm_namespace   = "kube-system"
     gcloud_get_credentials_command    = module.infra.gke_get_credentials_command
     artifact_registry_repository_id   = module.infra.artifact_registry_repository_id
+    artifact_registry_docker_prefix     = module.infra.artifact_registry_docker_prefix
     jenkins_image_repository          = module.infra.jenkins_image_repository
     ingress_static_ip_name            = module.infra.ingress_static_ip_name
     ingress_static_ip_address         = module.infra.ingress_static_ip_address

@@ -37,6 +37,13 @@ show_usage() {
   Jenkins image.tag: use env JENKINS_IMAGE_TAG=v1.0.0, or pass Helm args after the service name, e.g.
     ./k8s/scripts/deploy.sh dev jenkins --set-string image.tag=v1.0.0
     Trailing args are applied after this script’s --set-string flags, so they win for the same key.
+  estateflow-admin-service image.repository (same precedence idea as Jenkins), highest precedence first:
+    ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY=REGION-docker.pkg.dev/PROJECT/REPO/estateflow-admin-service  (full path, no tag)
+    GCP_PROJECT_ID + GCP_REGION + ARTIFACT_REGISTRY_REPOSITORY  → .../estateflow-admin-service
+    Else if SKIP_ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY_AUTO is unset: terraform output
+    artifact_registry_docker_prefix from deployment/terraform/envs/<env>, then /estateflow-admin-service
+    If that output is missing (old state), falls back to stripping /jenkins from jenkins_image_repository.
+    SKIP_ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY_AUTO=1  → do not inject; use values + chart defaults only
   Jenkins Helm namespace: defaults to Terraform output gke_namespace (e.g. dev-estateflow), else <env>-estateflow.
     Override with NAMESPACE=... or JENKINS_HELM_NAMESPACE=... (NAMESPACE wins).
   Helm upgrades: HELM_UPGRADE_FORCE=1 fixes SSA field conflicts by forcing resource replacement. On Helm 4+ this uses
@@ -87,6 +94,35 @@ jenkins_resolve_image_repository() {
     out="$(cd "$tfdir" && terraform output -raw jenkins_image_repository 2>/dev/null)" || true
     if [[ -n "$out" ]]; then
       printf '%s' "$out"
+    fi
+  fi
+}
+
+# Full Artifact Registry path for the admin service image (no tag).
+estateflow_admin_service_resolve_image_repository() {
+  local env="$1"
+  if [[ -n "${ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY:-}" ]]; then
+    printf '%s' "${ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY}"
+    return 0
+  fi
+  if [[ "${SKIP_ESTATEFLOW_ADMIN_SERVICE_IMAGE_REPOSITORY_AUTO:-}" == "1" ]]; then
+    return 0
+  fi
+  if [[ -n "${GCP_PROJECT_ID:-}" && -n "${GCP_REGION:-}" && -n "${ARTIFACT_REGISTRY_REPOSITORY:-}" ]]; then
+    printf '%s' "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/estateflow-admin-service"
+    return 0
+  fi
+  local tfdir="$REPO_ROOT/deployment/terraform/envs/$env"
+  if [[ -d "$tfdir" ]] && command -v terraform >/dev/null 2>&1; then
+    local prefix jenkins_repo
+    prefix="$(cd "$tfdir" && terraform output -raw artifact_registry_docker_prefix 2>/dev/null)" || true
+    if [[ -n "$prefix" ]]; then
+      printf '%s' "${prefix}/estateflow-admin-service"
+      return 0
+    fi
+    jenkins_repo="$(cd "$tfdir" && terraform output -raw jenkins_image_repository 2>/dev/null)" || true
+    if [[ -n "$jenkins_repo" && "$jenkins_repo" == */jenkins ]]; then
+      printf '%s' "${jenkins_repo%/jenkins}/estateflow-admin-service"
     fi
   fi
 }
@@ -142,6 +178,7 @@ helm_upgrade() {
   ns="$(helm_namespace "$service" "$env")"
 
   local jenkins_image_overrides=()
+  local estateflow_admin_image_overrides=()
   if [[ "$service" == "jenkins" ]]; then
     local resolved
     resolved="$(jenkins_resolve_image_repository "$env")"
@@ -152,6 +189,13 @@ helm_upgrade() {
     if [[ -n "${JENKINS_IMAGE_TAG:-}" ]]; then
       jenkins_image_overrides+=(--set-string "image.tag=${JENKINS_IMAGE_TAG}")
       echo "    (Jenkins image.tag from JENKINS_IMAGE_TAG: ${JENKINS_IMAGE_TAG})"
+    fi
+  elif [[ "$service" == "estateflow-admin-service" ]]; then
+    local admin_repo
+    admin_repo="$(estateflow_admin_service_resolve_image_repository "$env")"
+    if [[ -n "$admin_repo" ]]; then
+      estateflow_admin_image_overrides+=(--set-string "image.repository=$admin_repo")
+      echo "    (estateflow-admin-service image.repository from env/terraform: $admin_repo)"
     fi
   fi
 
@@ -187,6 +231,7 @@ helm_upgrade() {
     "${helm_ns_create[@]}" \
     --values "$values" \
     "${jenkins_image_overrides[@]}" \
+    "${estateflow_admin_image_overrides[@]}" \
     "${helm_upgrade_extra[@]}" \
     "$@"
 }

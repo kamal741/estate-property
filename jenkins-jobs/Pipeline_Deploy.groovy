@@ -21,6 +21,7 @@ def gcp_cred_id = pdp?.getParameterDefinition('GCP_CREDENTIALS_ID')?.defaultValu
 def jenkins_k8s_sa = pdp?.getParameterDefinition('JENKINS_K8S_SERVICE_ACCOUNT')?.defaultValue ?: 'jenkins'
 
 pipelineJob("$job_name") {
+    // HTML requires OWASP Safe HTML formatter: antisamy-markup-formatter in jenkins/plugins.txt + init 02-configureMarkupFormatter.groovy.
     description("""\
     Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check.
     <b>ENV</b> is not a job parameter; it must be defined on the controller, folder, or agent (e.g. <code>ENV=dev</code>).
@@ -247,8 +248,15 @@ pipeline {
                     def services = [params.SERVICE_NAME]
                     for (svc in services) {
                         echo "Deploying ${svc} in ${env.ENV} environment"
+                        // deploy.sh resolves image.repository from Terraform or from these env vars (must match Build-Push-Image IMAGE_REPOSITORY).
+                        def arRepo = env.IMAGE_REPOSITORY?.trim() && env.IMAGE_REPOSITORY.contains('/')
+                            ? env.IMAGE_REPOSITORY.substring(env.IMAGE_REPOSITORY.lastIndexOf('/') + 1).trim()
+                            : "estateflow-${env.ENV}"
                         sh """
                         export NAMESPACE="${env.NAMESPACE}"
+                        export GCP_PROJECT_ID="${env.PROJECT_ID}"
+                        export GCP_REGION="${env.REGION}"
+                        export ARTIFACT_REGISTRY_REPOSITORY="${arRepo}"
                         cd "${env.WORKSPACE}/estate-property/k8s/scripts"
                         ./deploy.sh ${env.ENV} ${svc} --set-string image.tag=${env.IMAGE_TAG}
                         """

@@ -103,7 +103,7 @@ Override the repository id for an env by passing **`artifact_registry_repository
 Terraform enables **`artifactregistry.googleapis.com`** and creates one **regional** Docker repository per environment in **`var.region`**, with id **`estateflow-<env>`** by default (`estateflow-dev`, `estateflow-prod`) so two roots can share one GCP project without a name clash.
 
 - **Pull access for GKE**: the default Compute Engine node service account (**`PROJECT_NUMBER-compute@developer.gserviceaccount.com`**) receives **`roles/artifactregistry.reader`** on that repository. If you later set a **custom** node service account on the pool, add the same role for that account (outside this module or extend the module).
-- **Outputs** (after `terraform apply`): **`artifact_registry_repository_id`**, **`jenkins_image_repository`** (Helm `image.repository` without tag). **`jenkins_gke_context`** includes both for **`jenkins-gke-env-from-terraform.sh`**.
+- **Outputs** (after `terraform apply`): **`artifact_registry_repository_id`**, **`artifact_registry_docker_prefix`** (REGION-docker.pkg.dev/PROJECT/REPO for app images; `k8s/scripts/deploy.sh` appends `/estateflow-admin-service` for that chart), **`jenkins_image_repository`** (Helm Jenkins `image.repository` without tag). **`jenkins_gke_context`** includes these for **`jenkins-gke-env-from-terraform.sh`**.
 
 ## GKE cluster + namespace
 

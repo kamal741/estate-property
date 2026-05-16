@@ -126,6 +126,12 @@ output "artifact_registry_region" {
   value       = google_artifact_registry_repository.docker.location
 }
 
+# REGION-docker.pkg.dev/PROJECT/REPO_ID — append /<image_name> for app images (e.g. estateflow-admin-service).
+output "artifact_registry_docker_prefix" {
+  description = "Docker registry prefix for this env's Artifact Registry repository (no image name or tag)."
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker.repository_id}"
+}
+
 output "jenkins_image_repository" {
   description = "Helm image.repository value for the custom Jenkins image (no tag): REGION-docker.pkg.dev/PROJECT/REPO/jenkins."
   value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker.repository_id}/jenkins"

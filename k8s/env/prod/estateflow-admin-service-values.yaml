@@ -1,7 +1,7 @@
 # Prod overrides: namespace defaults to **prod-estateflow** via deploy.sh.
+# **image.repository** is set by deploy.sh from Terraform or GCP_* env (same pattern as dev); see k8s/scripts/deploy.sh --help.
 # Deploy:
-#   ./k8s/scripts/deploy.sh prod estateflow-admin-service \
-#     --set-string image.tag=YOUR_TAG \
+#   ./k8s/scripts/deploy.sh prod estateflow-admin-service --set-string image.tag=YOUR_TAG \
 #     --set-string databaseHost="$(cd deployment/terraform/envs/prod && terraform output -raw db_private_ip)"
 #
 # Create Secrets in **prod-estateflow** — by default Terraform creates **estateflow-admin-db** and
@@ -9,7 +9,6 @@
 # Set `create_app_runtime_secrets = false` in `terraform.tfvars` if you manage these with External Secrets or kubectl only.
 
 image:
-  repository: us-central1-docker.pkg.dev/project-cd7b56f0-4325-4b25-88a/estateflow-prod/estateflow-admin-service
   tag: prod
   pullPolicy: IfNotPresent
 
