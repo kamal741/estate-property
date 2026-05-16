@@ -29,6 +29,12 @@ variable "db_tier" {
   default     = "db-f1-micro"
 }
 
+variable "db_max_connections" {
+  type        = number
+  description = "PostgreSQL max_connections flag. db-f1-micro defaults to ~25; raise when running multiple EstateFlow services on GKE or lower app pool sizes instead."
+  default     = null
+}
+
 variable "db_deletion_protection" {
   type        = bool
   description = "When true, Terraform cannot destroy the Cloud SQL instance until protection is disabled."

@@ -40,6 +40,14 @@ resource "google_sql_database_instance" "postgres" {
       }
     }
 
+    dynamic "database_flags" {
+      for_each = var.db_max_connections != null ? [1] : []
+      content {
+        name  = "max_connections"
+        value = tostring(var.db_max_connections)
+      }
+    }
+
     ip_configuration {
       ipv4_enabled    = !var.enable_private_sql
       private_network = var.enable_private_sql ? google_compute_network.private[0].self_link : null

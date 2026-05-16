@@ -5,8 +5,10 @@ module "infra" {
   region     = var.region
   env        = "dev"
 
-  db_user      = "estateflow_user"
-  db_tier      = "db-f1-micro"
+  db_user              = "estateflow_user"
+  db_tier              = "db-f1-micro"
+  # Admin + brokerage + client each open several Hikari pools; f1-micro default max_connections is ~25.
+  db_max_connections = 100
   redis_tier   = "BASIC"
   redis_memory = 1
 

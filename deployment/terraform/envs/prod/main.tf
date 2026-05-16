@@ -5,8 +5,9 @@ module "infra" {
   region     = var.region
   env        = "prod"
 
-  db_user      = "estateflow_user"
-  db_tier      = "db-g1-small"
+  db_user              = "estateflow_user"
+  db_tier              = "db-g1-small"
+  db_max_connections = 200
   redis_tier   = "STANDARD_HA"
   redis_memory = 5
 
