@@ -1,8 +1,8 @@
 # App runtime secrets for estateflow-admin-service Helm chart (secretKeyRef names are fixed).
 #
-# IMPORTANT: use string_data only. Do NOT use data { key = base64encode(...) } — that double-encodes
-# when combined with manual kubectl patches or provider quirks; pods then see values like cG9zdGdyZXM=
-# instead of postgres.
+# IMPORTANT: use data with plain text (hashicorp/kubernetes >= 3.x). The provider encodes once for the API.
+# Do NOT use base64encode() here — that double-encodes; pods then see MTAuMzAuMC4z instead of 10.30.0.3.
+# (Provider 2.x used string_data; provider 3.x removed it in favour of plain data.)
 
 resource "terraform_data" "credentials_schema" {
   input = var.credentials_schema
@@ -26,7 +26,7 @@ resource "kubernetes_secret_v1" "estateflow_admin_db" {
 
   type = "Opaque"
 
-  string_data = {
+  data = {
     username = var.db_user
     password = var.db_password
     host     = var.db_host
@@ -61,7 +61,7 @@ resource "kubernetes_secret_v1" "estateflow_redis" {
 
   type = "Opaque"
 
-  string_data = {
+  data = {
     host     = var.redis_host
     password = var.redis_auth_string
   }

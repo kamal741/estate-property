@@ -40,7 +40,7 @@ resource "kubernetes_namespace_v1" "app" {
   }
 }
 
-# App credentials for estateflow-admin-service (string_data only — see modules/app-runtime-secrets).
+# App credentials for estateflow-admin-service (see modules/app-runtime-secrets).
 module "app_runtime_secrets" {
   source = "../../modules/app-runtime-secrets"
   count  = var.create_app_runtime_secrets ? 1 : 0
