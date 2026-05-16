@@ -6,6 +6,14 @@ import hudson.model.Hudson
 import hudson.model.ParametersDefinitionProperty
 import hudson.triggers.TimerTrigger
 
+// Add new deployable services here only — the job UI multi-select is built from this list.
+def DEPLOYABLE_SERVICES = [
+    'estateflow-admin-service',
+    'estateflow-brokerage-agent-service',
+    'estateflow-client-service',
+]
+def all_services_csv = DEPLOYABLE_SERVICES.join(',')
+
 def job_name = 'Pipeline_Deploy'
 def scriptname = this.class.getName() ?: ''
 
@@ -19,18 +27,30 @@ def git_cred_deploy = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_DEPLOY')?.
 def git_cred_service = pdp?.getParameterDefinition('GIT_CREDENTIALS_ID_SERVICE')?.defaultValue ?: ''
 def gcp_cred_id = pdp?.getParameterDefinition('GCP_CREDENTIALS_ID')?.defaultValue ?: ''
 def jenkins_k8s_sa = pdp?.getParameterDefinition('JENKINS_K8S_SERVICE_ACCOUNT')?.defaultValue ?: 'jenkins'
-def legacy_service = pdp?.getParameterDefinition('SERVICE_NAME')?.defaultValue
-    ?: pdp?.getParameterDefinition('SERVICE_NAMES')?.defaultValue
-    ?: 'estateflow-admin-service'
-def legacy_set = legacy_service.split(',').collect { it.trim() } as Set
-def deploy_admin_default = legacy_set.contains('estateflow-admin-service')
-def deploy_broker_default = legacy_set.contains('estateflow-brokerage-agent-service')
-def deploy_client_default = legacy_set.contains('estateflow-client-service')
+def service_names_default = pdp?.getParameterDefinition('SERVICE_NAMES')?.defaultValue
+    ?: pdp?.getParameterDefinition('SERVICE_NAME')?.defaultValue
+    ?: DEPLOYABLE_SERVICES[0]
+// Migrate defaults from old per-service boolean parameters (removed).
+if (pdp?.getParameterDefinition('DEPLOY_ESTATEFLOW_ADMIN_SERVICE') != null) {
+    def picked = []
+    if (pdp.getParameterDefinition('DEPLOY_ESTATEFLOW_ADMIN_SERVICE')?.defaultValue) {
+        picked << 'estateflow-admin-service'
+    }
+    if (pdp.getParameterDefinition('DEPLOY_ESTATEFLOW_BROKERAGE_AGENT_SERVICE')?.defaultValue) {
+        picked << 'estateflow-brokerage-agent-service'
+    }
+    if (pdp.getParameterDefinition('DEPLOY_ESTATEFLOW_CLIENT_SERVICE')?.defaultValue) {
+        picked << 'estateflow-client-service'
+    }
+    if (picked) {
+        service_names_default = picked.join(',')
+    }
+}
 
 pipelineJob("$job_name") {
     // HTML requires OWASP Safe HTML formatter: antisamy-markup-formatter in jenkins/plugins.txt + init 02-configureMarkupFormatter.groovy.
     description("""\
-    Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check. Select one or more services with the <b>DEPLOY_*</b> checkboxes.
+    Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check. Select one or more services with <b>SERVICE_NAMES</b> (multi-select). Add services in <code>DEPLOYABLE_SERVICES</code> in this job's .groovy file.
     <b>ENV</b> is not a job parameter; it must be defined on the controller, folder, or agent (e.g. <code>ENV=dev</code>).
     <b>GCP_AUTH_MODE</b>: <code>workload_identity</code> (default) uses the <b>pod</b> Kubernetes service account + GKE Workload Identity (no JSON key): bind the pod SA to a GCP service account and grant it Artifact Registry + GKE deploy roles; build must run <i>inside</i> the cluster. <code>secret_key</code> uses <b>GCP_CREDENTIALS_ID</b> (Secret file JSON) and <code>gcloud auth activate-service-account</code> (for agents outside the cluster or until WI is set up).
     <b>JENKINS_K8S_SERVICE_ACCOUNT</b> should match <code>k8s/services/charts/jenkins/values.yaml</code> <code>serviceAccount.name</code> (default <code>jenkins</code>) — that is the K8s identity Workload Identity annotates to your GCP service account. For <code>workload_identity</code> + <code>IMAGE_BUILD_MODE=cloud_build</code>, grant that GCP SA <code>roles/cloudbuild.builds.editor</code> (or equivalent) so <code>gcloud builds submit</code> succeeds.
@@ -50,9 +70,6 @@ pipelineJob("$job_name") {
         stringParam('GIT_BRANCH_SERVICE', git_brnch_service, 'Git branch (EstateFlow)')
         stringParam('GIT_CREDENTIALS_ID_DEPLOY', "$git_cred_deploy", 'Jenkins credential ID for HTTPS checkout of estate-property. Leave empty if the repo is public.')
         stringParam('GIT_CREDENTIALS_ID_SERVICE', "$git_cred_service", 'Jenkins credential ID for HTTPS checkout of pizenith-technologies/EstateFlow. Required for private repos: use Username with password (GitHub username + Personal Access Token); GitHub does not accept account passwords for Git over HTTPS.')
-        booleanParam('DEPLOY_ESTATEFLOW_ADMIN_SERVICE', deploy_admin_default, 'estateflow-admin-service')
-        booleanParam('DEPLOY_ESTATEFLOW_BROKERAGE_AGENT_SERVICE', deploy_broker_default, 'estateflow-brokerage-agent-service')
-        booleanParam('DEPLOY_ESTATEFLOW_CLIENT_SERVICE', deploy_client_default, 'estateflow-client-service')
         choiceParam('IMAGE_BUILD_MODE', ['cloud_build', 'docker'], 'cloud_build: one shared <code>jenkins/cloudbuild-estateflow.yaml</code> + <code>gcloud builds submit</code> (substitutions pick Dockerfile + image; no Docker socket). docker: local build/push (needs <code>/var/run/docker.sock</code>).')
         choiceParam('GCP_AUTH_MODE', ['workload_identity', 'secret_key'], 'workload_identity: no JSON key; pod uses GKE Workload Identity (see job description). secret_key: use GCP_CREDENTIALS_ID JSON file + activate-service-account.')
         stringParam('GCP_CREDENTIALS_ID', "$gcp_cred_id", 'Required when <b>GCP_AUTH_MODE</b> is <code>secret_key</code>: Jenkins <b>Secret file</b> credential ID (GCP service account JSON). Ignored for <code>workload_identity</code>.')
@@ -61,6 +78,25 @@ pipelineJob("$job_name") {
 
     properties {
         disableConcurrentBuilds()
+    }
+    // extended-choice-parameter (plugins.txt): one multi-select; edit DEPLOYABLE_SERVICES above to add options.
+    configure { project ->
+        def paramsRoot = project / 'properties' / 'hudson.model.ParametersDefinitionProperty' / 'parameterDefinitions'
+        paramsRoot.children().findAll { node ->
+            node.name() == 'com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition' &&
+                (node / 'name').text() == 'SERVICE_NAMES'
+        }.each { it.replaceNode {} }
+        paramsRoot << 'com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition' {
+            name 'SERVICE_NAMES'
+            type 'PT_CHECKBOX'
+            value all_services_csv
+            defaultValue service_names_default
+            multiSelectDelimiter ','
+            quoteValue false
+            saveJSONParameterToFile false
+            visibleItemCount "${Math.max(DEPLOYABLE_SERVICES.size(), 5)}"
+            description 'Select one or more services to test, build, and deploy (comma-separated in the build).'
+        }
     }
     definition {
         cps {
@@ -82,21 +118,15 @@ pipeline {
         stage('Validate') {
             steps {
                 script {
-                    def services = []
-                    if (params.DEPLOY_ESTATEFLOW_ADMIN_SERVICE) {
-                        services << 'estateflow-admin-service'
-                    }
-                    if (params.DEPLOY_ESTATEFLOW_BROKERAGE_AGENT_SERVICE) {
-                        services << 'estateflow-brokerage-agent-service'
-                    }
-                    if (params.DEPLOY_ESTATEFLOW_CLIENT_SERVICE) {
-                        services << 'estateflow-client-service'
-                    }
-                    if (services.isEmpty() && params.SERVICE_NAME?.trim()) {
-                        services << params.SERVICE_NAME.trim()
-                    }
+                    def allowed = ${DEPLOYABLE_SERVICES.inspect()} as Set
+                    def raw = (params.SERVICE_NAMES ?: params.SERVICE_NAME ?: '').toString()
+                    def services = raw.split(',').collect { it.trim() }.findAll { it }
                     if (services.isEmpty()) {
-                        error('Select at least one service to deploy (DEPLOY_* checkboxes).')
+                        error('Select at least one service in SERVICE_NAMES.')
+                    }
+                    def unknown = services.findAll { !allowed.contains(it) }
+                    if (!unknown.isEmpty()) {
+                        error("Unknown service(s): ${unknown.join(', ')}. Add them to DEPLOYABLE_SERVICES in jenkins-jobs/Pipeline_Deploy.groovy.")
                     }
                     env.SELECTED_SERVICES = services.join(',')
                     echo "Selected services: ${env.SELECTED_SERVICES}"
