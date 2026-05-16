@@ -50,11 +50,16 @@ resource "kubernetes_secret_v1" "estateflow_admin_db" {
       app        = "estateflow"
       managed_by = "terraform"
     }
+    annotations = {
+      # Bump to force secret rewrite when credentials schema changes (string_data only).
+      "estateflow.io/credentials-schema" = "string-data-v2"
+    }
   }
 
   type = "Opaque"
 
-  # string_data: provider base64-encodes once. Do not use data { host = base64encode(...) } — easy to double-encode (e.g. manual patch).
+  # string_data only — Kubernetes stores one base64 layer. Do not use data { base64encode(...) } or patch
+  # individual keys with pre-encoded values (causes double-encoding for username/password/host).
   string_data = {
     username = module.infra.db_user
     password = module.infra.db_password
@@ -74,6 +79,9 @@ resource "kubernetes_secret_v1" "estateflow_redis" {
       env        = "dev"
       app        = "estateflow"
       managed_by = "terraform"
+    }
+    annotations = {
+      "estateflow.io/credentials-schema" = "string-data-v2"
     }
   }
 

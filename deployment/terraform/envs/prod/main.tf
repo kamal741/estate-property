@@ -49,6 +49,9 @@ resource "kubernetes_secret_v1" "estateflow_admin_db" {
       app        = "estateflow"
       managed_by = "terraform"
     }
+    annotations = {
+      "estateflow.io/credentials-schema" = "string-data-v2"
+    }
   }
 
   type = "Opaque"
@@ -72,6 +75,9 @@ resource "kubernetes_secret_v1" "estateflow_redis" {
       env        = "prod"
       app        = "estateflow"
       managed_by = "terraform"
+    }
+    annotations = {
+      "estateflow.io/credentials-schema" = "string-data-v2"
     }
   }
 

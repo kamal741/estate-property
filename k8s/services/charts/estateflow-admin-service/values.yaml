@@ -60,10 +60,9 @@ javaOpts: "-XX:MaxRAMPercentage=75.0"
 adminServiceEnv:
   SPRING_PROFILES_ACTIVE: dev
   PORT: "8080"
-  DATABASE_USERNAME: postgres
-  DATABASE_PASSWORD: postgres
+  # DATABASE_USERNAME / DATABASE_PASSWORD: use secretKeyRef in k8s/env/<env>/…-values.yaml (Terraform secret estateflow-admin-db).
   JWT_SECRET: dev-secret-must-be-at-least-32-bytes-long!
-  REDIS_HOST: redis
+  # REDIS_HOST: use secretKeyRef in env values (estateflow-redis).
   SPRING_MAIL_HOST: mailhog
   SPRING_MAIL_PORT: 1025
   SPRING_MAIL_USERNAME: ""
