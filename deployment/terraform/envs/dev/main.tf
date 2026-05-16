@@ -54,10 +54,11 @@ resource "kubernetes_secret_v1" "estateflow_admin_db" {
 
   type = "Opaque"
 
-  data = {
-    username = base64encode(module.infra.db_user)
-    password = base64encode(module.infra.db_password)
-    host     = base64encode(module.infra.db_host)
+  # string_data: provider base64-encodes once. Do not use data { host = base64encode(...) } — easy to double-encode (e.g. manual patch).
+  string_data = {
+    username = module.infra.db_user
+    password = module.infra.db_password
+    host     = module.infra.db_host
   }
 
   depends_on = [kubernetes_namespace_v1.app]
@@ -78,9 +79,9 @@ resource "kubernetes_secret_v1" "estateflow_redis" {
 
   type = "Opaque"
 
-  data = {
-    host     = base64encode(module.infra.redis_host)
-    password = base64encode(module.infra.redis_auth_string)
+  string_data = {
+    host     = module.infra.redis_host
+    password = module.infra.redis_auth_string
   }
 
   depends_on = [kubernetes_namespace_v1.app]
