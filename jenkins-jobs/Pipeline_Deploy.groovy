@@ -111,6 +111,7 @@ pipelineJob("$job_name") {
     }
     // Single-quoted CPS script: ${env.*} is evaluated at runtime. Inject allowed list at Job DSL seed time (not ${} in ''').
     def allowedServicesLiteral = DEPLOYABLE_SERVICES.inspect()
+    def jdbcServicesLiteral = JDBC_SERVICES.inspect()
     def pipelineScript = '''\
 pipeline {
     agent any
@@ -300,7 +301,8 @@ pipeline {
                     } else {
                         sh gkeCreds
                     }
-                    def needsDb = env.SELECTED_SERVICES.split(',').collect { it.trim() }.any { JDBC_SERVICES.contains(it) }
+                    def jdbcServices = __JDBC_SERVICES__ as Set
+                    def needsDb = env.SELECTED_SERVICES.split(',').collect { it.trim() }.any { jdbcServices.contains(it) }
                     if (needsDb && !env.DATABASE_HOST?.trim()) {
                         def dbHost = sh(
                             script: """
@@ -407,9 +409,10 @@ pipeline {
                         ? env.IMAGE_REPOSITORY.substring(env.IMAGE_REPOSITORY.lastIndexOf('/') + 1).trim()
                         : "estateflow-${env.ENV}"
                     def dbHost = env.DATABASE_HOST?.trim()
+                    def jdbcServices = __JDBC_SERVICES__ as Set
                     def deployService = { String svc ->
                         echo "Deploying ${svc} in ${env.ENV} environment"
-                        if (JDBC_SERVICES.contains(svc) && !dbHost) {
+                        if (jdbcServices.contains(svc) && !dbHost) {
                             error("databaseHost unset for ${svc}: terraform apply (estateflow-admin-db key host + ${env.ENV}-db-host in Secret Manager), or set DATABASE_HOST on Jenkins. Re-run after Authenticate GCP (get-credentials).")
                         }
                         def dbHostExport = dbHost ? "export DATABASE_HOST='${dbHost}'" : ''
@@ -500,7 +503,9 @@ pipeline {
         }
     }
 }
-'''.stripIndent().replace('__ALLOWED_SERVICES__', allowedServicesLiteral)
+'''.stripIndent()
+        .replace('__ALLOWED_SERVICES__', allowedServicesLiteral)
+        .replace('__JDBC_SERVICES__', jdbcServicesLiteral)
 
     definition {
         cps {
