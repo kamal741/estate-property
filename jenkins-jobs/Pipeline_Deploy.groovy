@@ -61,9 +61,9 @@ pipeline {
         timestamps()
     }
     environment {
-        PROJECT_ID = "project-cd7b56f0-4325-4b25-88a"
-        REGION     = "us-central1"
-        GKE_ZONE   = "us-central1-a"
+        PROJECT_ID = "project-estateflow-${env.ENV}"
+        REGION     = "northamerica-northeast1"
+        GKE_ZONE   = "northamerica-northeast1-a"
         GKE_CLUSTER = "${env.ENV}-estateflow-cluster"
         NAMESPACE   = "${env.ENV}-estateflow"
         IMAGE_REPOSITORY = "${REGION}-docker.pkg.dev/${PROJECT_ID}/estateflow-${env.ENV}"
