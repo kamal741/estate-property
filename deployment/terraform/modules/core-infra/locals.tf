@@ -1,9 +1,8 @@
 locals {
-  # JDBC / psql host: private IP when enabled, else public (empty string treated as unset).
-  db_host = coalesce(
-    try(nullif(google_sql_database_instance.postgres.private_ip_address, ""), null),
-    try(nullif(google_sql_database_instance.postgres.public_ip_address, ""), null)
-  )
+  # JDBC / psql host: prefer private IP when set (avoid coalesce+nullif — fails on some Terraform/provider evals).
+  db_private_ip_resolved = google_sql_database_instance.postgres.private_ip_address
+  db_public_ip_resolved  = google_sql_database_instance.postgres.public_ip_address
+  db_host = local.db_private_ip_resolved != "" ? local.db_private_ip_resolved : local.db_public_ip_resolved
 
   common_labels = merge(
     {

@@ -38,6 +38,13 @@ resource "google_secret_manager_secret_version" "db_host_version" {
   secret_data = local.db_host
 
   deletion_policy = "ABANDON"
+
+  lifecycle {
+    precondition {
+      condition     = local.db_host != ""
+      error_message = "Cloud SQL must have private_ip_address or public_ip_address before writing ${var.env}-db-host to Secret Manager."
+    }
+  }
 }
 
 resource "google_secret_manager_secret" "redis_host" {
