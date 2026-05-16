@@ -38,55 +38,21 @@ resource "kubernetes_namespace_v1" "app" {
   }
 }
 
-resource "kubernetes_secret_v1" "estateflow_admin_db" {
-  count = var.create_app_runtime_secrets ? 1 : 0
+module "app_runtime_secrets" {
+  source = "../../modules/app-runtime-secrets"
+  count  = var.create_app_runtime_secrets ? 1 : 0
 
-  metadata {
-    name      = "estateflow-admin-db"
-    namespace = kubernetes_namespace_v1.app.metadata[0].name
-    labels = {
-      env        = "prod"
-      app        = "estateflow"
-      managed_by = "terraform"
-    }
-    annotations = {
-      "estateflow.io/credentials-schema" = "string-data-v2"
-    }
+  providers = {
+    kubernetes = kubernetes
   }
 
-  type = "Opaque"
-
-  string_data = {
-    username = module.infra.db_user
-    password = module.infra.db_password
-    host     = module.infra.db_host
-  }
-
-  depends_on = [kubernetes_namespace_v1.app]
-}
-
-resource "kubernetes_secret_v1" "estateflow_redis" {
-  count = var.create_app_runtime_secrets ? 1 : 0
-
-  metadata {
-    name      = "estateflow-redis"
-    namespace = kubernetes_namespace_v1.app.metadata[0].name
-    labels = {
-      env        = "prod"
-      app        = "estateflow"
-      managed_by = "terraform"
-    }
-    annotations = {
-      "estateflow.io/credentials-schema" = "string-data-v2"
-    }
-  }
-
-  type = "Opaque"
-
-  string_data = {
-    host     = module.infra.redis_host
-    password = module.infra.redis_auth_string
-  }
+  namespace         = kubernetes_namespace_v1.app.metadata[0].name
+  env               = "prod"
+  db_user           = module.infra.db_user
+  db_password       = module.infra.db_password
+  db_host           = module.infra.db_host
+  redis_host        = module.infra.redis_host
+  redis_auth_string = module.infra.redis_auth_string
 
   depends_on = [kubernetes_namespace_v1.app]
 }

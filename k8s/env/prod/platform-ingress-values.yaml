@@ -29,18 +29,19 @@ routes:
       app.kubernetes.io/name: jenkins
       app.kubernetes.io/component: ingress
 
-  # Namespace matches Terraform (prod): kubernetes_namespace_v1.app → prod-estateflow
-  - name: spring-boot-api
+  # serviceName must match the admin Service (Helm release name by default: estateflow-admin-service).
+  - name: estateflow-admin-service
     annotations:
       kubernetes.io/ingress.class: "gce"
       kubernetes.io/ingress.global-static-ip-name: "prod-estateflow-ingress-ip"
     namespace: prod-estateflow
-    host: api.prod.example.com
-    serviceName: api
+    host: api.prod.estateflow.com
+    serviceName: estateflow-admin-service
     servicePort: 8080
     path: /
     pathType: Prefix
     labels:
+      app.kubernetes.io/name: estateflow-admin-service
       app.kubernetes.io/component: ingress
 
 # Optional TLS: add under the matching route item (same indent as `labels:`):

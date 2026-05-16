@@ -38,18 +38,20 @@ routes:
       app.kubernetes.io/name: jenkins
       app.kubernetes.io/component: ingress
 
-  # Namespace matches Terraform (dev/main.tf): kubernetes_namespace_v1.app → dev-estateflow
-  - name: spring-boot-api
+  # Namespace matches Terraform app ns (dev-estateflow). serviceName = Helm release / Service name
+  # from ./k8s/scripts/deploy.sh dev estateflow-admin-service (default: estateflow-admin-service).
+  - name: estateflow-admin-service
     annotations:
       kubernetes.io/ingress.class: "gce"
       kubernetes.io/ingress.global-static-ip-name: "dev-estateflow-ingress-ip"
     namespace: dev-estateflow
-    host: api.dev.example.com
-    serviceName: api
+    host: api.dev.estateflow.com
+    serviceName: estateflow-admin-service
     servicePort: 8080
     path: /
     pathType: Prefix
     labels:
+      app.kubernetes.io/name: estateflow-admin-service
       app.kubernetes.io/component: ingress
 
 # Optional per-route TLS (add under that route item):
