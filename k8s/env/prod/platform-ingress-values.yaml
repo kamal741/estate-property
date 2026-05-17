@@ -15,7 +15,7 @@
 # Static IP name must match Terraform: `terraform output -raw ingress_static_ip_name` (e.g. prod-estateflow-ingress-ip).
 
 routes:
-  - name: jenkins-ui
+  - name: jenkins
     annotations:
       kubernetes.io/ingress.class: "gce"
       kubernetes.io/ingress.global-static-ip-name: "prod-estateflow-ingress-ip"
