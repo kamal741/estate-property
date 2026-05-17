@@ -18,8 +18,8 @@
 #
 # Add more services later: copy a route block, or add k8s/env/dev/<app>-values.yaml and a matching `helm install` for that chart.
 #
-# Optional: set only if your ingress controller registers an IngressClass:
-# ingressClassName: azure-application-gateway
+# GKE: use IngressClass gce (annotation kubernetes.io/ingress.class alone is deprecated on newer clusters).
+ingressClassName: gce
 
 routes:
   - name: jenkins

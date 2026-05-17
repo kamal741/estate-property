@@ -12,6 +12,7 @@ def DEPLOYABLE_SERVICES = [
     'estateflow-brokerage-agent-service',
     'estateflow-client-service',
     'estateflow-admin-ui',
+    'jenkins',
 ]
 def JDBC_SERVICES = [
     'estateflow-admin-service',
@@ -60,7 +61,7 @@ if (pdp?.getParameterDefinition('DEPLOY_ESTATEFLOW_ADMIN_SERVICE') != null) {
 pipelineJob("$job_name") {
     // HTML requires OWASP Safe HTML formatter: antisamy-markup-formatter in jenkins/plugins.txt + init 02-configureMarkupFormatter.groovy.
     description("""\
-    Deploy EstateFlow services to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check, then <b>platform-ingress</b> (GCE routes). Select services with <b>SERVICE_NAMES</b> (multi-select). Add services in <code>DEPLOYABLE_SERVICES</code> in this job's .groovy file.
+    Deploy EstateFlow services and/or <b>jenkins</b> to GKE: checkout, test, build/push image, Helm upgrade via k8s/scripts/deploy.sh, rollout check, then <b>platform-ingress</b> (GCE routes). Select services with <b>SERVICE_NAMES</b> (multi-select). Add services in <code>DEPLOYABLE_SERVICES</code> in this job's .groovy file. Jenkins image builds from <code>estate-property/jenkins/Dockerfile</code> (not EstateFlow-Service).
     <b>ENV</b> is not a job parameter; it must be defined on the controller, folder, or agent (e.g. <code>ENV=dev</code>).
     <b>GCP_AUTH_MODE</b>: <code>workload_identity</code> (default) uses the <b>pod</b> Kubernetes service account + GKE Workload Identity (no JSON key): bind the pod SA to a GCP service account and grant it Artifact Registry + GKE deploy roles; build must run <i>inside</i> the cluster. <code>secret_key</code> uses <b>GCP_CREDENTIALS_ID</b> (Secret file JSON) and <code>gcloud auth activate-service-account</code> (for agents outside the cluster or until WI is set up).
     <b>JENKINS_K8S_SERVICE_ACCOUNT</b> should match <code>k8s/services/charts/jenkins/values.yaml</code> <code>serviceAccount.name</code> (default <code>jenkins</code>) — that is the K8s identity Workload Identity annotates to your GCP service account. For <code>workload_identity</code> + <code>IMAGE_BUILD_MODE=cloud_build</code>, grant that GCP SA <code>roles/cloudbuild.builds.editor</code> (or equivalent) so <code>gcloud builds submit</code> succeeds.

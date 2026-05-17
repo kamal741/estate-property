@@ -87,18 +87,19 @@ startupProbe:
   failureThreshold: 180
 
 # After startup succeeds, Jenkins may still serve 503 on /login for several minutes — keep liveness lenient.
+# timeoutSeconds must be < periodSeconds: GCE Ingress maps readiness probe → GCP health check (timeoutSec < checkIntervalSec).
 livenessProbe:
   path: /login
   initialDelaySeconds: 120
   periodSeconds: 20
-  timeoutSeconds: 30
+  timeoutSeconds: 10
   failureThreshold: 30
 
 readinessProbe:
   path: /login
   initialDelaySeconds: 15
   periodSeconds: 10
-  timeoutSeconds: 30
+  timeoutSeconds: 5
   failureThreshold: 60
 
 nodeSelector: {}
