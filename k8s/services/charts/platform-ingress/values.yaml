@@ -1,5 +1,10 @@
-# Single place to declare public hostnames → ClusterIP Services (any namespace).
+# Single place to declare public hostnames → ClusterIP Services.
 # Install with env-specific -f, e.g. k8s/env/dev/platform-ingress-values.yaml
+#
+# GKE: all routes in a file should use the same .namespace and the same
+# kubernetes.io/ingress.global-static-ip-name — the chart renders ONE Ingress per
+# namespace with every host in spec.rules (multiple Ingress + one static IP only binds
+# the first host; others get 404).
 #
 # ingressClassName: only set if your cluster defines networking.k8s.io/IngressClass
 # (e.g. azure-application-gateway, traefik, webapprouting). Leave "" to omit the field.
@@ -9,5 +14,4 @@ fullnameOverride: ""
 
 ingressClassName: ""
 
-# Each item becomes one Ingress in .namespace (standard Ingress cannot span namespaces in one object).
 routes: []

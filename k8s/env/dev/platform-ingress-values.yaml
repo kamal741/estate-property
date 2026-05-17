@@ -1,4 +1,4 @@
-# Dev routes for platform-ingress.
+# Dev routes for platform-ingress (one Ingress object, all hosts — required for GKE static IP).
 #
 # No custom domain yet: after `helm upgrade`, confirm the Ingress uses the Terraform static IP:
 #   terraform output -raw ingress_static_ip_address   # from deployment/terraform/envs/dev

@@ -1,18 +1,29 @@
-{{- range (.Values.routes | default list) }}
+{{/*
+  GKE classic Ingress: only ONE Ingress can bind a given global static IP
+  (kubernetes.io/ingress.global-static-ip-name). Multiple Ingress objects with the same
+  annotation leave extra hosts without an ADDRESS / URL map entries → 404.
+  This template emits one Ingress per namespace, with all hosts as spec.rules[].
+*/}}
+{{- $routes := .Values.routes | default list }}
+{{- $byNs := dict }}
+{{- range $routes }}
+  {{- $ns := required "each route needs namespace" .namespace }}
+  {{- $_ := set $byNs $ns (append (get $byNs $ns | default list) .) }}
+{{- end }}
+{{- range $ns, $routesInNs := $byNs }}
+{{- $first := index $routesInNs 0 }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .name | quote }}
-  namespace: {{ .namespace | quote }}
+  name: {{ include "platform-ingress.name" $ }}
+  namespace: {{ $ns | quote }}
   labels:
     helm.sh/chart: {{ include "platform-ingress.chart" $ | quote }}
     app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
     app.kubernetes.io/instance: {{ $.Release.Name | quote }}
-    {{- with .labels }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-  {{- with .annotations }}
+    app.kubernetes.io/name: {{ include "platform-ingress.name" $ | quote }}
+  {{- with $first.annotations }}
   annotations:
 {{ toYaml . | nindent 4 }}
   {{- end }}
@@ -20,11 +31,8 @@ spec:
   {{- with $.Values.ingressClassName }}
   ingressClassName: {{ . | quote }}
   {{- end }}
-  {{- with .tls }}
-  tls:
-{{ toYaml . | nindent 4 }}
-  {{- end }}
   rules:
+    {{- range $routesInNs }}
     - host: {{ .host | quote }}
       http:
         paths:
@@ -35,4 +43,5 @@ spec:
                 name: {{ .serviceName | quote }}
                 port:
                   number: {{ .servicePort }}
+    {{- end }}
 {{- end }}
