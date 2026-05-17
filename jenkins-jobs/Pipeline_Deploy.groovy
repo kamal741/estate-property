@@ -1,5 +1,5 @@
 // Job DSL reads the existing job so seed re-applies UI defaults (email, cron, git branches).
-// Requires "In-process Script Approval" for Hudson.instance on a new controller until approved.
+// Hudson.instance requires whole-script approval on a new controller; init.groovy.d auto-approves (see README).
 // ENV must be set by Jenkins (global properties, folder env, or agent); e.g. dev or prod.
 
 import hudson.model.Hudson

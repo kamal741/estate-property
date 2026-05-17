@@ -37,7 +37,10 @@ GIT Project for .groovy files <a href="https://github.com/kamal741/estate-proper
 
     steps {
         dsl {
-            external('jenkins-jobs/*.groovy')
+            // Explicit order (not *.groovy): Security_Approvals first, then pipelines. Avoids Hudson.instance scripts blocking seed.
+            external('jenkins-jobs/Jenkins_Security_Approvals.groovy')
+            external('jenkins-jobs/Pipeline_Deploy.groovy')
+            external('jenkins-jobs/TestPrintPipeline.groovy')
             removeAction('DELETE')
         }
     }

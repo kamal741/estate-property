@@ -14,6 +14,7 @@ import javaposse.jobdsl.plugin.LookupStrategy
 import javaposse.jobdsl.plugin.RemovedJobAction
 import javaposse.jobdsl.plugin.RemovedViewAction
 import jenkins.model.Jenkins
+import org.jenkinsci.plugins.scriptsecurity.scripts.ScriptApproval
 
 import java.util.Collections
 
@@ -61,6 +62,10 @@ project.setLogRotator(new LogRotator(-1, 10, -1, -1))
 jenkinsInstance.add(project, jobName)
 
 def job = jenkinsInstance.getItem(jobName) as FreeStyleProject
+println('seedJobs: pre-approving pending Job DSL scripts before first seed build')
+def scriptApproval = ScriptApproval.get()
+scriptApproval.preapproveAll()
+scriptApproval.save()
 println('seedJobs: scheduling first Jenkins-Seed_DSL build with default parameters')
 job.scheduleBuild2(
   0,

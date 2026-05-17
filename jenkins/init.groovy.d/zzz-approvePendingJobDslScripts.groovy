@@ -6,34 +6,40 @@ import org.jenkinsci.plugins.scriptsecurity.scripts.ScriptApproval
 // seedJobs.groovy schedules Jenkins-Seed_DSL as soon as Jenkins is up. The first build used to lose
 // a race with this thread because we waited 45s before the first pass — "ERROR: script not yet approved for use".
 // Run an immediate pass, then poll every few seconds during bootstrap, then a slow tail for late seeds.
-void preapprovePendingScripts(ScriptApproval approval) {
+boolean preapprovePendingScripts(ScriptApproval approval) {
   try {
+    def pendingScripts = approval.pendingScripts?.size() ?: 0
+    def pendingSigs = approval.pendingSignatures?.size() ?: 0
+    if (pendingScripts == 0 && pendingSigs == 0) {
+      return false
+    }
     approval.preapproveAll()
     approval.save()
+    println("job-dsl-script-approval: auto-approved ${pendingScripts} script(s), ${pendingSigs} signature(s)")
+    return true
   } catch (Throwable t) {
     println("job-dsl-script-approval: ${t.class.simpleName}: ${t.message}")
+    return false
   }
 }
 
 Thread.start {
   def approval = ScriptApproval.get()
-  println('job-dsl-script-approval: bootstrap thread started (immediate preapprove)')
+  println('job-dsl-script-approval: background thread started (immediate preapprove)')
   preapprovePendingScripts(approval)
 
   def fastIntervalMs = 5_000L
   def fastPasses = 60
-  println("job-dsl-script-approval: fast passes every ${fastIntervalMs / 1000}s × ${fastPasses} (~${fastPasses * fastIntervalMs / 60_000} min)")
+  println("job-dsl-script-approval: fast passes every ${fastIntervalMs / 1000}s × ${fastPasses}")
   fastPasses.times {
     sleep(fastIntervalMs)
     preapprovePendingScripts(approval)
   }
 
-  def intervalMs = 120_000L
-  def iterations = 25
-  println("job-dsl-script-approval: slow passes every ${intervalMs / 1000}s × ${iterations}")
-  iterations.times {
+  def intervalMs = 30_000L
+  println("job-dsl-script-approval: continuous passes every ${intervalMs / 1000}s (manual seed / Job DSL)")
+  while (true) {
     sleep(intervalMs)
     preapprovePendingScripts(approval)
   }
-  println('job-dsl-script-approval: bootstrap window finished')
 }

@@ -180,13 +180,12 @@ This repo ships:
 - **`01-configureSecurityRealm.groovy`** — if **`JENKINS_ADMIN_PASSWORD`** is set (from a Kubernetes Secret via Helm **`security.localAdmin`**), enables **Hudson private security** and **full control once logged in** (anonymous access off). Create Secret **`jenkins-admin`** in the Jenkins namespace before relying on this (see **`k8s/env/<env>/jenkins-values.yaml`**).
 - **`97-setCSRFAndScriptSecurity.groovy`** — enables **`DefaultCrumbIssuer`** (CSRF protection) and runs **`preapproveAll()`** for Job DSL script approval.
 - **`seedJobs.groovy`** — creates **`Jenkins-Seed_DSL`** with **`GIT_BRANCH`** and **`EMAIL_RECIPIENTS`** parameters and starts the first build via **`scheduleBuild2`** with defaults (`main` / empty). If an old seed job exists without parameters, delete the job or wipe the controller PVC once so init can recreate it.
-- **`zzz-approvePendingJobDslScripts.groovy`** — periodically runs **`ScriptApproval.preapproveAll()`** plus **`save()`** (there is no `approvePendingScripts()` API). That clears pending whole-script entries after Job DSL runs, including when the first seed happens long after boot. Rebuild the controller image and restart the pod after changing this file.
+- **`zzz-approvePendingJobDslScripts.groovy`** — runs **`ScriptApproval.preapproveAll()`** + **`save()`** on boot, then every 5s for ~5 minutes, then **every 30s forever** so manual seed runs do not need approval after the bootstrap window.
+- **`seedJobs.groovy`** — calls **`preapproveAll()`** immediately before scheduling the first **`Jenkins-Seed_DSL`** build.
 
-**If the seed still fails once:** wait up to about two minutes after the failure (next bootstrap pass) and **run the seed again**, or use **Manage Jenkins → In-process Script Approval** once.
+**Job DSL** scripts such as **`Pipeline_Deploy.groovy`** use **`Hudson.instance.getItem`** to preserve UI parameter defaults (whole-script approval on first run). Init hooks **`preapproveAll()`** + the continuous approver thread auto-approve pending scripts so manual approval is not needed after the controller image includes those init files.
 
-**Job DSL Groovy** under **`jenkins-jobs/`** should avoid **`Jenkins.instance`**, **`Hudson.instance.getItem`**, and similar core APIs; they stay pending until approved. **`Jenkins_Seed_DSL.groovy`** uses fixed defaults for parameters and schedule (tune values in the Jenkins UI after the first successful seed if needed).
-
-**Without rebuilding:** **Manage Jenkins → In-process Script Approval** (or the link in the failed build log) and approve each pending script.
+**If the seed still fails once:** wait ~30s and **run the seed again** (background approver), or **Manage Jenkins → In-process Script Approval** once, then rebuild/redeploy the controller image so init scripts above are active.
 
 You also have **`permissive-script-security`** in `plugins.txt`; if your admins enable that strategy under **Configure Global Security**, fewer approvals are required (follow your org’s security policy).
 

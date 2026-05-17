@@ -1,14 +1,10 @@
 import jenkins.*
 import hudson.*
 
-// Define variables and some with default values
 def job_name = 'Jenkins-Security_Approvals'
 def scriptname = this.class.getName() ?: ''
 
-// Grab the old job if it exists
 def curJob = hudson.model.Hudson.instance.getItem("$job_name")
-
-// Grab values we want to persist if job exists
 def email_recipients = curJob?.getProperty('hudson.model.ParametersDefinitionProperty')?.getParameterDefinition('EMAIL_RECIPIENTS')?.defaultValue ?: ''
 def sched = curJob?.triggers.find { it.value instanceof hudson.triggers.TimerTrigger }?.value?.spec ?: '#0 12 * * *'
 
@@ -44,13 +40,21 @@ job("$job_name") {
         String[] knownsigs = [
         "method groovy.json.JsonSlurperClassic parseText java.lang.String",
         "method hudson.model.ItemGroup getItem java.lang.String",
+        "method hudson.model.Hudson getItem java.lang.String",
+        "method hudson.model.Item getProperty java.lang.Class",
+        "method hudson.model.Job getTriggers",
+        "method hudson.model.ParameterDefinition getDefaultValue",
+        "method hudson.model.ParametersDefinitionProperty getParameterDefinition java.lang.String",
         "method hudson.model.Job isBuildable",
         "method hudson.model.Job isBuilding",
         "method io.jenkins.plugins.casc.ConfigurationAsCode configure",
         "method jenkins.model.Jenkins getItemByFullName java.lang.String",
         "new groovy.json.JsonSlurperClassic",
         "new java.lang.Integer java.lang.String",
+        "method org.jenkinsci.plugins.scriptsecurity.scripts.ScriptApproval preapproveAll",
+        "method org.jenkinsci.plugins.scriptsecurity.scripts.ScriptApproval save",
         "staticMethod jenkins.model.Jenkins getInstance",
+        "staticMethod hudson.model.Hudson getInstance",
         "staticMethod java.lang.System getenv java.lang.String",
         "method java.util.logging.Logger info java.lang.String",
         "staticMethod groovy.time.TimeCategory minus java.util.Date java.util.Date",

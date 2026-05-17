@@ -21,6 +21,15 @@ image:
   tag: dev
   pullPolicy: IfNotPresent
 
+# e2-standard-2 single node (~2 vCPU allocatable): low CPU request so Jenkins + all services fit.
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
 # Set at deploy time to match Cloud SQL (private IP when enable_private_sql is true).
 databaseHost: ""
 
@@ -65,6 +74,6 @@ adminServiceEnv:
   SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "false"
   SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "false"
   SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED: "false"
-  BROKER_OWNER_PORTAL_LOGIN_BASE_URL: https://app.dev.estateflow.com/broker/login
+  BROKER_OWNER_PORTAL_LOGIN_BASE_URL: http://app.136.110.170.163.nip.io/broker/login
 
 replicaCount: 1
